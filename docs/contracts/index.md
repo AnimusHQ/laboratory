@@ -8,6 +8,7 @@
 - `open/api/openapi/dataset-registry.yaml` — Dataset и DatasetVersion.
 - `open/api/openapi/quality.yaml` — quality‑правила и оценки.
 - `open/api/openapi/experiments.yaml` — эксперименты, Run/Execution, PolicySnapshot, EnvironmentDefinition/Lock, политика, артефакты, evidence.
+- `open/api/openapi/dataplane_internal.yaml` — внутренний протокол CP↔DP (исполнение, heartbeat, terminal, статус).
 - `open/api/openapi/lineage.yaml` — lineage‑события.
 - `open/api/openapi/audit.yaml` — аудит и экспорт.
 
@@ -23,19 +24,19 @@
 
 ## 2. Контракт CP↔DP (Data Plane протокол)
 ### 2.1 Текущий статус
-- Транспорт: решение фиксируется в M3‑Design (T0104). Требование: HTTP/gRPC, идемпотентность сообщений, повторяемость.
+- Транспорт: **HTTP + OpenAPI**, контракт зафиксирован в `open/api/openapi/dataplane_internal.yaml` (ADR‑0007).
+- Аутентификация: внутренняя подпись заголовков (X‑Animus‑Auth‑*) до внедрения mTLS/OIDC (M5).
 
 ### 2.2 Обязательные сообщения протокола (roadmap.json)
-- `RunExecutionRequest`
-- `RunHeartbeat`
-- `RunTerminalState`
-- `ArtifactCommitted`
+- CP→DP: `RunExecutionRequest` (запуск Run), `RunExecutionStatus` (reconciliation).
+- DP→CP: `RunHeartbeat`, `RunTerminalState`, `ArtifactCommitted` (M3 — заглушка контракта).
 - `LogCursorUpdate` (опционально)
 - `DevEnvSessionHeartbeat` (если DevEnv включён)
 
 ### 2.3 Идемпотентность
-- Все сообщения DP→CP должны быть безопасно повторяемыми.
-- CP обязан принимать дубликаты без нарушения консистентности.
+- Все сообщения DP→CP должны быть безопасно повторяемыми по `eventId`.
+- CP→DP запросы исполнения идемпотентны по `dispatchId`.
+- CP принимает дубликаты без нарушения консистентности; терминальные состояния неизменяемы.
 
 ## 3. Контракты событий (Event Contracts)
 ### 3.1 Список EV
