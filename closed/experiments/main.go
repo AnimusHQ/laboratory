@@ -186,6 +186,16 @@ func main() {
 		os.Exit(2)
 	}
 	evalImageRef := env.String("ANIMUS_EVALUATION_IMAGE_REF", "")
+	dpReconcileInterval, err := env.Duration("ANIMUS_DP_RECONCILE_INTERVAL", 30*time.Second)
+	if err != nil {
+		logger.Error("invalid dp reconcile interval", "error", err)
+		os.Exit(2)
+	}
+	dpHeartbeatStaleAfter, err := env.Duration("ANIMUS_DP_HEARTBEAT_STALE_AFTER", 2*time.Minute)
+	if err != nil {
+		logger.Error("invalid dp heartbeat stale after", "error", err)
+		os.Exit(2)
+	}
 
 	api := newExperimentsAPI(
 		logger,
@@ -214,6 +224,7 @@ func main() {
 		RunTokenTTL:           runTokenTTL,
 		DatapilotURL:          datapilotURL,
 	})
+	startDPReconciler(ctx, logger, db, dataplaneURL, internalAuthSecret, dpReconcileInterval, dpHeartbeatStaleAfter)
 
 	handler := auth.Middleware{
 		Logger:        logger,
