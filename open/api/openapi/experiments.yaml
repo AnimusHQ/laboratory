@@ -2026,6 +2026,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /projects/{project_id}/runs/{run_id}:dispatch:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Диспетчеризировать Run в Data Plane
+      description: |
+        Запускает выполнение Run через Data Plane. Операция идемпотентна по `Idempotency-Key`
+        (если заголовок отсутствует, используется `run_id`).
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectRunDispatchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectRunDispatchResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /projects/{project_id}/runs/{run_id}:plan:
     parameters:
       - name: project_id
@@ -3822,6 +3888,29 @@ components:
           type: boolean
         specHash:
           type: string
+    ProjectRunDispatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        idempotencyKey:
+          type: string
+    ProjectRunDispatchResponse:
+      type: object
+      additionalProperties: false
+      required: [runId, projectId, dispatchId, status, dpBaseUrl, created]
+      properties:
+        runId:
+          type: string
+        projectId:
+          type: string
+        dispatchId:
+          type: string
+        status:
+          type: string
+        dpBaseUrl:
+          type: string
+        created:
+          type: boolean
     ProjectRunGetResponse:
       type: object
       additionalProperties: false

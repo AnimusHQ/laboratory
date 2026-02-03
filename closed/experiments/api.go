@@ -35,6 +35,7 @@ type experimentsAPI struct {
 	runTokenSecret string
 	runTokenTTL    time.Duration
 	datapilotURL   string
+	dataplaneURL   string
 
 	evidenceSigningSecret string
 	gitlabWebhookSecret   string
@@ -52,6 +53,7 @@ func newExperimentsAPI(
 	runTokenSecret string,
 	runTokenTTL time.Duration,
 	datapilotURL string,
+	dataplaneURL string,
 	evidenceSigningSecret string,
 	gitlabWebhookSecret string,
 	trainingExecutor trainingExecutor,
@@ -67,6 +69,7 @@ func newExperimentsAPI(
 		runTokenSecret:        strings.TrimSpace(runTokenSecret),
 		runTokenTTL:           runTokenTTL,
 		datapilotURL:          strings.TrimSpace(datapilotURL),
+		dataplaneURL:          strings.TrimSpace(dataplaneURL),
 		evidenceSigningSecret: strings.TrimSpace(evidenceSigningSecret),
 		gitlabWebhookSecret:   strings.TrimSpace(gitlabWebhookSecret),
 		trainingExecutor:      trainingExecutor,
@@ -83,6 +86,7 @@ func (api *experimentsAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /projects/{project_id}/runs/{run_id}", api.handleGetRun)
 	mux.HandleFunc("GET /projects/{project_id}/runs/{run_id}/policy-snapshot", api.handleGetRunPolicySnapshot)
 	mux.HandleFunc("GET /projects/{project_id}/runs/{run_id}/reproducibility-bundle", api.handleGetRunReproducibilityBundle)
+	mux.HandleFunc("POST /projects/{project_id}/runs/{run_id}:dispatch", api.handleDispatchRun)
 	mux.HandleFunc("POST /projects/{project_id}/runs/{run_id}:plan", api.handlePlanRun)
 	mux.HandleFunc("GET /projects/{project_id}/runs/{run_id}:plan", api.handleGetRunPlan)
 	mux.HandleFunc("POST /projects/{project_id}/runs/{run_id}:dry-run", api.handleDryRun)
@@ -121,6 +125,9 @@ func (api *experimentsAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /execution-ledger", api.handleListExecutionLedger)
 	mux.HandleFunc("GET /execution-ledger/{run_id}", api.handleGetExecutionLedger)
 	mux.HandleFunc("POST /gitlab/webhook", api.handleGitlabWebhook)
+	mux.HandleFunc("POST /internal/cp/runs/{run_id}/heartbeat", api.handleDPHeartbeat)
+	mux.HandleFunc("POST /internal/cp/runs/{run_id}/terminal", api.handleDPTerminal)
+	mux.HandleFunc("POST /internal/cp/runs/{run_id}/artifact-committed", api.handleDPArtifactCommitted)
 
 	mux.HandleFunc("GET /policies", api.handleListPolicies)
 	mux.HandleFunc("POST /policies", api.handleCreatePolicy)

@@ -331,11 +331,17 @@ func (api *experimentsAPI) handleGetRun(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	derivedState := deriveRunStateFromRecords(planSpec, planExists, stepExecutions)
+	state := derivedState.State
+	if normalized := domain.NormalizeRunState(record.Status); normalized != "" {
+		if normalized == domain.RunStateRunning || domain.IsTerminalRunState(normalized) {
+			state = normalized
+		}
+	}
 
 	api.writeJSON(w, http.StatusOK, getRunResponse{
 		RunID:          record.ID,
 		Status:         record.Status,
-		State:          string(derivedState.State),
+		State:          string(state),
 		SpecHash:       record.SpecHash,
 		CreatedAt:      record.CreatedAt,
 		PlanExists:     derivedState.PlanExists,

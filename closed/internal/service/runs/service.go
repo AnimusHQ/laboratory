@@ -225,6 +225,14 @@ func transitionAction(to domain.RunState) string {
 	switch to {
 	case domain.RunStatePlanned:
 		return "run.planned"
+	case domain.RunStateRunning:
+		return "run.state_changed"
+	case domain.RunStateSucceeded:
+		return "run.state_changed"
+	case domain.RunStateFailed:
+		return "run.state_changed"
+	case domain.RunStateCanceled:
+		return "run.state_changed"
 	case domain.RunStateDryRunRunning:
 		return "dry_run.started"
 	case domain.RunStateDryRunSucceeded:

@@ -168,6 +168,7 @@ func main() {
 	)
 
 	datapilotURL := env.String("ANIMUS_DATAPILOT_URL", "http://localhost:8080")
+	dataplaneURL := env.String("ANIMUS_DATAPLANE_URL", "")
 
 	evaluationEnabled, err := env.Bool("ANIMUS_EVALUATION_ENABLED", true)
 	if err != nil {
@@ -195,6 +196,7 @@ func main() {
 		internalAuthSecret,
 		runTokenTTL,
 		datapilotURL,
+		dataplaneURL,
 		evidenceSigningSecret,
 		gitlabWebhookSecret,
 		trainingExec,
