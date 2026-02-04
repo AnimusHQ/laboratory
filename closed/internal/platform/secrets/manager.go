@@ -45,6 +45,8 @@ func NewManager(cfg Config) (Manager, error) {
 	switch provider {
 	case "static":
 		return &StaticManager{values: cfg.StaticMapping, leaseTT: cfg.LeaseTTL}, nil
+	case "vault", "vault_k8s":
+		return NewVaultK8sManager(cfg)
 	default:
 		return NoopManager{}, nil
 	}

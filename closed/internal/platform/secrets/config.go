@@ -10,9 +10,15 @@ import (
 )
 
 type Config struct {
-	Provider      string
-	LeaseTTL      time.Duration
-	StaticMapping map[string]map[string]string
+	Provider       string
+	LeaseTTL       time.Duration
+	StaticMapping  map[string]map[string]string
+	VaultAddr      string
+	VaultRole      string
+	VaultAuthPath  string
+	VaultJWTPath   string
+	VaultNamespace string
+	VaultTimeout   time.Duration
 }
 
 func ConfigFromEnv() (Config, error) {
@@ -28,10 +34,20 @@ func ConfigFromEnv() (Config, error) {
 			return Config{}, fmt.Errorf("invalid SECRETS_STATIC_JSON: %w", err)
 		}
 	}
+	vaultTimeout, err := env.Duration("SECRETS_VAULT_TIMEOUT", 5*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
-		Provider:      provider,
-		LeaseTTL:      time.Duration(leaseSeconds) * time.Second,
-		StaticMapping: mapping,
+		Provider:       provider,
+		LeaseTTL:       time.Duration(leaseSeconds) * time.Second,
+		StaticMapping:  mapping,
+		VaultAddr:      strings.TrimSpace(env.String("SECRETS_VAULT_ADDR", "")),
+		VaultRole:      strings.TrimSpace(env.String("SECRETS_VAULT_ROLE", "")),
+		VaultAuthPath:  strings.TrimSpace(env.String("SECRETS_VAULT_AUTH_PATH", "auth/kubernetes/login")),
+		VaultJWTPath:   strings.TrimSpace(env.String("SECRETS_VAULT_JWT_PATH", "")),
+		VaultNamespace: strings.TrimSpace(env.String("SECRETS_VAULT_NAMESPACE", "")),
+		VaultTimeout:   vaultTimeout,
 	}
 	return cfg, cfg.Validate()
 }
@@ -43,6 +59,14 @@ func (c Config) Validate() error {
 	}
 	switch provider {
 	case "noop", "static":
+		return nil
+	case "vault", "vault_k8s":
+		if strings.TrimSpace(c.VaultAddr) == "" {
+			return fmt.Errorf("vault addr is required")
+		}
+		if strings.TrimSpace(c.VaultRole) == "" {
+			return fmt.Errorf("vault role is required")
+		}
 		return nil
 	default:
 		return fmt.Errorf("unsupported secrets provider: %s", provider)
