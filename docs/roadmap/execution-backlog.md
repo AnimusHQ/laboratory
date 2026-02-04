@@ -2001,4 +2001,5 @@
 - команды: `make integrations-test`, `make openapi-lint`, `./scripts/go_test.sh ./closed/...`
 - SCM: прогон unit‑тестов с mock‑провайдером; проверка allowlist и блокировки диспетча.
 - вебхуки: симуляция получателя (HTTP 500/429 → ретраи, HTTP 200 → delivered), проверка идемпотентности по `event_id`.
-- observability: наличие метрик `animus_webhook_*` на `/metrics` и аудит `webhook.delivery.*`.
+- SIEM: симуляция webhook‑экспорта (HTTP 500/429 → ретраи, 4xx → DLQ) и syslog‑коннектора; проверка replay через `/admin/audit/exports/dlq/{delivery_id}:replay`.
+- observability: наличие метрик `animus_webhook_*` и `animus_audit_export_*` на `/metrics`, аудит `webhook.delivery.*` и `audit.export.*`.

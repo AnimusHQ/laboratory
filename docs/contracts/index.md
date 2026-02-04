@@ -77,6 +77,17 @@
 - Очередь персистентна: `webhook_deliveries` + `webhook_delivery_attempts`, ретраи детерминированы.
 - Аудит: `webhook.subscription.created|updated|enabled|disabled`, `webhook.delivery.enqueued|attempted|delivered|failed`, `webhook.delivery.replay_requested`.
 
+### 1.11 Экспорт аудита в SIEM (P5)
+- Источник: append‑only `audit_events`, доставка событий в внешние SIEM‑системы через персистентную очередь.
+- Коннекторы: syslog (`tcp`/`udp`) и webhook; payload NDJSON, без секретов.
+- Идемпотентность: уникальность `(sink_id, event_id)`; `Idempotency-Key = sink_id:event_id`.
+- Очередь: `audit_export_deliveries` + `audit_export_attempts`; статусы `pending|retry|delivered|dlq`.
+- DLQ: статус `dlq` с `dlq_reason`, replay через `POST /admin/audit/exports/dlq/{delivery_id}:replay` (идемпотентность по `Idempotency-Key`/`replay_token`).
+- Админ‑API (read‑only): `GET /admin/audit/exports/sinks`, `GET /admin/audit/exports/deliveries`, `GET /admin/audit/exports/deliveries/{delivery_id}/attempts`.
+- Подпись webhook: `X-Animus-Signature: sha256=<hex>`, секрет извлекается по `webhook_secret_ref` (CP не хранит значения).
+- Аудит: `audit.export.attempted`, `audit.export.delivered`, `audit.export.dlq`, `audit.export.replay_requested`.
+- Метрики: `animus_audit_export_attempts_total`, `animus_audit_export_latency_seconds_*`, `animus_audit_export_dlq_size`.
+
 ## 2. Контракт CP↔DP (Data Plane протокол)
 ### 2.1 Текущий статус
 - Транспорт: **HTTP + OpenAPI**, контракт зафиксирован в `open/api/openapi/dataplane_internal.yaml` (ADR‑0007).
