@@ -12,6 +12,8 @@
 !/closed/dataset-registry/*.go
 !/closed/audit/
 !/closed/audit/*.go
+!/closed/deploy/
+!/closed/deploy/**/*
 /closed/frontend_landing/
 /closed/frontend_landing/**
 
