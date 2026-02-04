@@ -14,6 +14,8 @@
 !/closed/audit/*.go
 !/closed/deploy/
 !/closed/deploy/**/*
+!/closed/scripts/
+!/closed/scripts/**/*
 /closed/frontend_landing/
 /closed/frontend_landing/**
 
