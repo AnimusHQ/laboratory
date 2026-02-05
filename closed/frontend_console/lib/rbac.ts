@@ -35,3 +35,34 @@ export function roleLabel(role: EffectiveRole): string {
       return 'Не определена';
   }
 }
+
+export type Capability =
+  | 'devenv:read'
+  | 'devenv:write'
+  | 'run:read'
+  | 'run:write'
+  | 'run:approve'
+  | 'model:read'
+  | 'model:write'
+  | 'model:approve'
+  | 'model:export'
+  | 'audit:read'
+  | 'ops:read';
+
+export function can(role: EffectiveRole, capability: Capability): boolean {
+  if (role === 'admin') {
+    return true;
+  }
+  if (role === 'editor') {
+    switch (capability) {
+      case 'audit:read':
+        return false;
+      default:
+        return true;
+    }
+  }
+  if (role === 'viewer') {
+    return capability.endsWith(':read');
+  }
+  return false;
+}

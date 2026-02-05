@@ -5,9 +5,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { OperationsPanel } from '@/components/console/operations-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { OperationsProvider } from '@/lib/operations';
 import { cn } from '@/lib/utils';
 import { ProjectProvider, useProjectContext } from '@/lib/project-context';
 import { deriveEffectiveRole, roleLabel } from '@/lib/rbac';
@@ -171,68 +173,73 @@ export function AppShell({ session, children }: { session: GatewaySession; child
 
   return (
     <ProjectProvider>
-      <div className="min-h-screen bg-background text-foreground">
-        <TopBar session={session} />
-        <div className="grid min-h-[calc(100vh-72px)] grid-cols-[260px_1fr]">
-          <aside className="border-r border-border/70 bg-card/40 p-5">
-            <div className="mb-6">
-              <div className="console-kicker">Навигация</div>
-              <div className="mt-2 text-sm text-muted-foreground">Контрольная плоскость</div>
-            </div>
-            <nav className="flex flex-col gap-6" aria-label="Основная навигация">
-              {navSections.map((section) => (
-                <div key={section.id} className="flex flex-col gap-2">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{section.label}</div>
-                  <div className="flex flex-col gap-1">
-                    {section.items.map((item) => {
-                      const active = isActive(item.href, pathname);
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={cn(
-                            'rounded-md px-3 py-2 text-sm transition',
-                            active ? 'bg-muted/50 text-foreground' : 'text-muted-foreground hover:bg-muted/40',
-                          )}
-                          aria-current={active ? 'page' : undefined}
-                        >
-                          <div className="font-semibold">{item.label}</div>
-                          {item.description ? <div className="text-xs text-muted-foreground">{item.description}</div> : null}
-                        </Link>
-                      );
-                    })}
+      <OperationsProvider>
+        <div className="min-h-screen bg-background text-foreground">
+          <TopBar session={session} />
+          <div className="grid min-h-[calc(100vh-72px)] grid-cols-[260px_1fr]">
+            <aside className="border-r border-border/70 bg-card/40 p-5">
+              <div className="mb-6">
+                <div className="console-kicker">Навигация</div>
+                <div className="mt-2 text-sm text-muted-foreground">Контрольная плоскость</div>
+              </div>
+              <nav className="flex flex-col gap-6" aria-label="Основная навигация">
+                {navSections.map((section) => (
+                  <div key={section.id} className="flex flex-col gap-2">
+                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{section.label}</div>
+                    <div className="flex flex-col gap-1">
+                      {section.items.map((item) => {
+                        const active = isActive(item.href, pathname);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                              'rounded-md px-3 py-2 text-sm transition',
+                              active ? 'bg-muted/50 text-foreground' : 'text-muted-foreground hover:bg-muted/40',
+                            )}
+                            aria-current={active ? 'page' : undefined}
+                          >
+                            <div className="font-semibold">{item.label}</div>
+                            {item.description ? <div className="text-xs text-muted-foreground">{item.description}</div> : null}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+            </aside>
+            <main className="px-8 py-6">
+              {session.mode === 'unauthenticated' ? (
+                <div className="mb-6 rounded-lg border border-amber-400/40 bg-card p-4 text-sm">
+                  <div className="font-semibold text-amber-200">Сессия не обнаружена</div>
+                  <div className="mt-2 text-muted-foreground">
+                    Для доступа требуется аутентификация через Gateway. Перейдите к началу входа и повторите запрос.
+                  </div>
+                  <div className="mt-3">
+                    <Link href="/auth/login" className="text-sm font-semibold text-primary">
+                      Перейти к входу через Gateway
+                    </Link>
                   </div>
                 </div>
-              ))}
-            </nav>
-          </aside>
-          <main className="px-8 py-6">
-            {session.mode === 'unauthenticated' ? (
-              <div className="mb-6 rounded-lg border border-amber-400/40 bg-card p-4 text-sm">
-                <div className="font-semibold text-amber-200">Сессия не обнаружена</div>
-                <div className="mt-2 text-muted-foreground">
-                  Для доступа требуется аутентификация через Gateway. Перейдите к началу входа и повторите запрос.
+              ) : null}
+              {session.mode === 'error' ? (
+                <div className="mb-6 rounded-lg border border-rose-400/40 bg-card p-4 text-sm">
+                  <div className="font-semibold text-rose-200">Сбой проверки сессии</div>
+                  <div className="mt-2 text-muted-foreground">
+                    Консоль не может подтвердить текущую сессию. Повторите запрос через несколько секунд.
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">Код: {session.error}</div>
                 </div>
-                <div className="mt-3">
-                  <Link href="/auth/login" className="text-sm font-semibold text-primary">
-                    Перейти к входу через Gateway
-                  </Link>
-                </div>
+              ) : null}
+              <div className="mb-6">
+                <OperationsPanel />
               </div>
-            ) : null}
-            {session.mode === 'error' ? (
-              <div className="mb-6 rounded-lg border border-rose-400/40 bg-card p-4 text-sm">
-                <div className="font-semibold text-rose-200">Сбой проверки сессии</div>
-                <div className="mt-2 text-muted-foreground">
-                  Консоль не может подтвердить текущую сессию. Повторите запрос через несколько секунд.
-                </div>
-                <div className="mt-2 text-xs text-muted-foreground">Код: {session.error}</div>
-              </div>
-            ) : null}
-            {children}
-          </main>
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </OperationsProvider>
     </ProjectProvider>
   );
 }
