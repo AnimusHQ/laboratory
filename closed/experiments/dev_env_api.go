@@ -23,8 +23,9 @@ const (
 	auditDevEnvCreated       = "devenv.created"
 	auditDevEnvProvisioned   = "devenv.provisioned"
 	auditDevEnvProvisionFail = "devenv.provision_failed"
-	auditDevEnvAccessIssued  = "devenv.access.issued"
-	auditDevEnvAccessProxy   = "devenv.access.proxy"
+	auditDevEnvRepoCloned    = "devenv.repo.cloned"
+	auditDevEnvSessionOpened = "devenv.session.opened"
+	auditDevEnvSessionAccess = "devenv.session.accessed"
 	auditDevEnvExpired       = "devenv.expired"
 	auditDevEnvDeleted       = "devenv.deleted"
 )
@@ -68,7 +69,7 @@ type devEnvironmentStore interface {
 	Get(ctx context.Context, projectID, devEnvID string) (postgres.DevEnvironmentRecord, error)
 	List(ctx context.Context, projectID, state string, limit int) ([]postgres.DevEnvironmentRecord, error)
 	UpdateState(ctx context.Context, projectID, devEnvID, state, dpJobName, dpNamespace string) (bool, error)
-	UpdateLastAccess(ctx context.Context, projectID, devEnvID string, accessedAt time.Time) (bool, error)
+	UpdateLastAccess(ctx context.Context, projectID, devEnvID string, accessedAt time.Time, minInterval time.Duration) (bool, error)
 	ListExpired(ctx context.Context, projectID string, now time.Time, limit int) ([]postgres.DevEnvironmentRecord, error)
 }
 
@@ -209,6 +210,47 @@ func (api *experimentsAPI) handleCreateDevEnvironment(w http.ResponseWriter, r *
 		api.writeError(w, r, http.StatusBadRequest, "template_ref_required")
 		return
 	}
+	repoURL := strings.TrimSpace(req.RepoURL)
+	refType := strings.ToLower(strings.TrimSpace(req.RefType))
+	refValue := strings.TrimSpace(req.RefValue)
+	commitPin := strings.TrimSpace(req.CommitPin)
+	if repoURL == "" {
+		api.writeError(w, r, http.StatusBadRequest, "repo_url_required")
+		return
+	}
+	repoInfo, err := parseRepoURL(repoURL, false)
+	if err != nil {
+		api.writeError(w, r, http.StatusBadRequest, "invalid_repo_url")
+		return
+	}
+	if repoInfo.Scheme != "https" && repoInfo.Scheme != "ssh" {
+		api.writeError(w, r, http.StatusBadRequest, "unsupported_repo_scheme")
+		return
+	}
+	if err := validateRepoAllowlist(repoURL, api.devEnvRepoAllowlist); err != nil {
+		if errors.Is(err, errRepoURLNotAllowed) {
+			api.writeError(w, r, http.StatusForbidden, "repo_url_not_allowed")
+			return
+		}
+		api.writeError(w, r, http.StatusBadRequest, "invalid_repo_url")
+		return
+	}
+	if !validDevEnvRefType(refType) {
+		api.writeError(w, r, http.StatusBadRequest, "invalid_ref_type")
+		return
+	}
+	if refValue == "" {
+		api.writeError(w, r, http.StatusBadRequest, "ref_value_required")
+		return
+	}
+	if refType == domain.DevEnvRefTypeCommit && !validCommitSHA(refValue) {
+		api.writeError(w, r, http.StatusBadRequest, "invalid_ref_value")
+		return
+	}
+	if commitPin != "" && !validCommitSHA(commitPin) {
+		api.writeError(w, r, http.StatusBadRequest, "invalid_commit_pin")
+		return
+	}
 
 	defStore := api.envDefinitionStore()
 	if defStore == nil {
@@ -265,6 +307,10 @@ func (api *experimentsAPI) handleCreateDevEnvironment(w http.ResponseWriter, r *
 		TemplateDefinitionID:      defRecord.Definition.ID,
 		TemplateDefinitionVersion: defRecord.Definition.Version,
 		TemplateIntegritySHA256:   defRecord.Definition.IntegritySHA256,
+		RepoURL:                   repoURL,
+		RefType:                   refType,
+		RefValue:                  refValue,
+		CommitPin:                 commitPin,
 		ImageName:                 imageName,
 		ImageRef:                  imageRef,
 		TTLSeconds:                ttlSeconds,
@@ -334,6 +380,11 @@ func (api *experimentsAPI) handleCreateDevEnvironment(w http.ResponseWriter, r *
 					"project_id":   projectID,
 					"template_ref": devEnv.TemplateRef,
 					"image_name":   devEnv.ImageName,
+					"repo_host":    repoInfo.Host,
+					"repo_path":    repoInfo.Path,
+					"ref_type":     devEnv.RefType,
+					"ref_value":    devEnv.RefValue,
+					"commit_pin":   devEnv.CommitPin,
 					"ttl_seconds":  devEnv.TTLSeconds,
 					"state":        devEnv.State,
 				},
@@ -389,6 +440,11 @@ func (api *experimentsAPI) handleCreateDevEnvironment(w http.ResponseWriter, r *
 					"project_id":   projectID,
 					"template_ref": devEnv.TemplateRef,
 					"image_name":   devEnv.ImageName,
+					"repo_host":    repoInfo.Host,
+					"repo_path":    repoInfo.Path,
+					"ref_type":     devEnv.RefType,
+					"ref_value":    devEnv.RefValue,
+					"commit_pin":   devEnv.CommitPin,
 					"ttl_seconds":  devEnv.TTLSeconds,
 					"state":        devEnv.State,
 				},
@@ -414,6 +470,10 @@ func (api *experimentsAPI) handleCreateDevEnvironment(w http.ResponseWriter, r *
 		TemplateRef:          record.Environment.TemplateRef,
 		TemplateVersion:      record.Environment.TemplateDefinitionVersion,
 		TemplateIntegritySHA: record.Environment.TemplateIntegritySHA256,
+		RepoURL:              record.Environment.RepoURL,
+		RefType:              record.Environment.RefType,
+		RefValue:             record.Environment.RefValue,
+		CommitPin:            record.Environment.CommitPin,
 		ImageName:            record.Environment.ImageName,
 		ImageRef:             record.Environment.ImageRef,
 		ResourceDefaults:     defRecord.Definition.ResourceDefaults,
@@ -470,6 +530,25 @@ func (api *experimentsAPI) handleCreateDevEnvironment(w http.ResponseWriter, r *
 		api.writeError(w, r, http.StatusInternalServerError, "audit_failed")
 		return
 	}
+	_ = api.appendDevEnvAudit(r.Context(), auditlog.Event{
+		OccurredAt:   time.Now().UTC(),
+		Actor:        identity.Subject,
+		Action:       auditDevEnvRepoCloned,
+		ResourceType: "dev_environment",
+		ResourceID:   record.Environment.ID,
+		RequestID:    r.Header.Get("X-Request-Id"),
+		IP:           requestIP(r.RemoteAddr),
+		UserAgent:    r.UserAgent(),
+		Payload: map[string]any{
+			"service":    "experiments",
+			"project_id": projectID,
+			"repo_host":  repoInfo.Host,
+			"repo_path":  repoInfo.Path,
+			"ref_type":   record.Environment.RefType,
+			"ref_value":  record.Environment.RefValue,
+			"commit_pin": record.Environment.CommitPin,
+		},
+	})
 
 	record.Environment.State = domain.DevEnvStateActive
 	record.Environment.DPJobName = provisionResp.JobName
@@ -617,12 +696,12 @@ func (api *experimentsAPI) handleAccessDevEnvironment(w http.ResponseWriter, r *
 		api.writeError(w, r, http.StatusInternalServerError, "internal_error")
 		return
 	}
-	_, _ = store.UpdateLastAccess(r.Context(), projectID, devEnvID, now)
+	_, _ = store.UpdateLastAccess(r.Context(), projectID, devEnvID, now, 0)
 
 	if err := api.appendDevEnvAudit(r.Context(), auditlog.Event{
 		OccurredAt:   now,
 		Actor:        identity.Subject,
-		Action:       auditDevEnvAccessIssued,
+		Action:       auditDevEnvSessionOpened,
 		ResourceType: "dev_environment",
 		ResourceID:   devEnvID,
 		RequestID:    r.Header.Get("X-Request-Id"),
@@ -644,7 +723,7 @@ func (api *experimentsAPI) handleAccessDevEnvironment(w http.ResponseWriter, r *
 		api.writeError(w, r, http.StatusInternalServerError, "dataplane_unavailable")
 		return
 	}
-	accessResp, statusCode, err := client.AccessDevEnv(r.Context(), dataplane.DevEnvAccessRequest{
+	accessResp, _, err := client.AccessDevEnv(r.Context(), dataplane.DevEnvAccessRequest{
 		DevEnvID:      devEnvID,
 		ProjectID:     projectID,
 		SessionID:     session.SessionID,
@@ -653,42 +732,6 @@ func (api *experimentsAPI) handleAccessDevEnvironment(w http.ResponseWriter, r *
 	}, r.Header.Get("X-Request-Id"))
 	if err != nil {
 		api.writeError(w, r, http.StatusBadGateway, "devenv_access_failed")
-		_ = api.appendDevEnvAudit(r.Context(), auditlog.Event{
-			OccurredAt:   now,
-			Actor:        identity.Subject,
-			Action:       auditDevEnvAccessProxy,
-			ResourceType: "dev_environment",
-			ResourceID:   devEnvID,
-			RequestID:    r.Header.Get("X-Request-Id"),
-			IP:           requestIP(r.RemoteAddr),
-			UserAgent:    r.UserAgent(),
-			Payload: map[string]any{
-				"service":     "experiments",
-				"project_id":  projectID,
-				"session_id":  session.SessionID,
-				"status_code": statusCode,
-			},
-		})
-		return
-	}
-
-	if err := api.appendDevEnvAudit(r.Context(), auditlog.Event{
-		OccurredAt:   now,
-		Actor:        identity.Subject,
-		Action:       auditDevEnvAccessProxy,
-		ResourceType: "dev_environment",
-		ResourceID:   devEnvID,
-		RequestID:    r.Header.Get("X-Request-Id"),
-		IP:           requestIP(r.RemoteAddr),
-		UserAgent:    r.UserAgent(),
-		Payload: map[string]any{
-			"service":    "experiments",
-			"project_id": projectID,
-			"session_id": session.SessionID,
-			"ready":      accessResp.Ready,
-		},
-	}); err != nil {
-		api.writeError(w, r, http.StatusInternalServerError, "audit_failed")
 		return
 	}
 
@@ -697,7 +740,7 @@ func (api *experimentsAPI) handleAccessDevEnvironment(w http.ResponseWriter, r *
 		ProjectID: projectID,
 		SessionID: session.SessionID,
 		ExpiresAt: expiresAt,
-		ProxyPath: "/projects/" + projectID + "/dev-environments/" + devEnvID + ":access",
+		ProxyPath: "/devenv-sessions/" + session.SessionID + "/proxy/",
 		Status:    boolToStatus(accessResp.Ready),
 		Message:   accessResp.Message,
 	})

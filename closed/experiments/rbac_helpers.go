@@ -50,6 +50,9 @@ func experimentsProjectResolver(db *sql.DB) auth.ProjectResolver {
 		if runID := strings.TrimSpace(r.URL.Query().Get("run_id")); runID != "" {
 			return projectIDForRun(r.Context(), db, runID)
 		}
+		if sessionID := strings.TrimSpace(r.PathValue("session_id")); sessionID != "" {
+			return projectIDForDevEnvSession(r.Context(), db, sessionID)
+		}
 
 		return "", auth.ErrProjectRequired
 	}
@@ -72,6 +75,18 @@ func projectIDForExperiment(ctx context.Context, db *sql.DB, experimentID string
 		return "", auth.ErrProjectRequired
 	}
 	row := db.QueryRowContext(ctx, `SELECT project_id FROM experiments WHERE experiment_id = $1`, strings.TrimSpace(experimentID))
+	var projectID sql.NullString
+	if err := row.Scan(&projectID); err != nil {
+		return "", auth.ErrProjectRequired
+	}
+	return strings.TrimSpace(projectID.String), nil
+}
+
+func projectIDForDevEnvSession(ctx context.Context, db *sql.DB, sessionID string) (string, error) {
+	if db == nil {
+		return "", auth.ErrProjectRequired
+	}
+	row := db.QueryRowContext(ctx, `SELECT project_id FROM dev_env_access_sessions WHERE session_id = $1`, strings.TrimSpace(sessionID))
 	var projectID sql.NullString
 	if err := row.Scan(&projectID); err != nil {
 		return "", auth.ErrProjectRequired

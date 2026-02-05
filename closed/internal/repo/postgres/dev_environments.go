@@ -89,7 +89,8 @@ const (
 		WHERE project_id = $1 AND dev_env_id = $2`
 	updateDevEnvironmentAccessQuery = `UPDATE dev_environments
 		SET last_access_at = $3
-		WHERE project_id = $1 AND dev_env_id = $2`
+		WHERE project_id = $1 AND dev_env_id = $2
+			AND (last_access_at IS NULL OR last_access_at < $4)`
 
 	insertDevEnvPolicySnapshotQuery = `INSERT INTO dev_env_policy_snapshots (
 			snapshot_id,
@@ -172,6 +173,15 @@ func (s *DevEnvironmentStore) Create(ctx context.Context, env domain.DevEnvironm
 	}
 	if err := requireIntegrity(env.TemplateIntegritySHA256); err != nil {
 		return DevEnvironmentRecord{}, false, err
+	}
+	if strings.TrimSpace(env.RepoURL) == "" {
+		return DevEnvironmentRecord{}, false, fmt.Errorf("repo url is required")
+	}
+	if strings.TrimSpace(env.RefType) == "" {
+		return DevEnvironmentRecord{}, false, fmt.Errorf("ref type is required")
+	}
+	if strings.TrimSpace(env.RefValue) == "" {
+		return DevEnvironmentRecord{}, false, fmt.Errorf("ref value is required")
 	}
 	if strings.TrimSpace(env.ImageName) == "" {
 		return DevEnvironmentRecord{}, false, fmt.Errorf("image name is required")
@@ -517,7 +527,7 @@ func (s *DevEnvironmentStore) UpdateState(ctx context.Context, projectID, devEnv
 	return updated > 0, nil
 }
 
-func (s *DevEnvironmentStore) UpdateLastAccess(ctx context.Context, projectID, devEnvID string, accessedAt time.Time) (bool, error) {
+func (s *DevEnvironmentStore) UpdateLastAccess(ctx context.Context, projectID, devEnvID string, accessedAt time.Time, minInterval time.Duration) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, fmt.Errorf("dev environment store not initialized")
 	}
@@ -529,7 +539,11 @@ func (s *DevEnvironmentStore) UpdateLastAccess(ctx context.Context, projectID, d
 	if accessedAt.IsZero() {
 		accessedAt = time.Now().UTC()
 	}
-	res, err := s.db.ExecContext(ctx, updateDevEnvironmentAccessQuery, projectID, devEnvID, accessedAt.UTC())
+	if minInterval < 0 {
+		minInterval = 0
+	}
+	minTime := accessedAt.Add(-minInterval).UTC()
+	res, err := s.db.ExecContext(ctx, updateDevEnvironmentAccessQuery, projectID, devEnvID, accessedAt.UTC(), minTime)
 	if err != nil {
 		return false, err
 	}

@@ -132,9 +132,25 @@ func main() {
 		logger.Error("invalid devenv access ttl", "error", err)
 		os.Exit(2)
 	}
+	devEnvAccessAuditInterval, err := env.Duration("ANIMUS_DEVENV_ACCESS_AUDIT_INTERVAL", time.Minute)
+	if err != nil {
+		logger.Error("invalid devenv access audit interval", "error", err)
+		os.Exit(2)
+	}
 	devEnvReconcileInterval, err := env.Duration("ANIMUS_DEVENV_RECONCILE_INTERVAL", 30*time.Second)
 	if err != nil {
 		logger.Error("invalid devenv reconcile interval", "error", err)
+		os.Exit(2)
+	}
+	devEnvRepoAllowlist, err := parseRepoAllowlist(env.String("ANIMUS_DEVENV_REPO_ALLOWLIST", ""))
+	if err != nil {
+		logger.Error("invalid devenv repo allowlist", "error", err)
+		os.Exit(2)
+	}
+	devEnvServiceDomain := env.String("ANIMUS_DEVENV_SERVICE_DOMAIN", "svc.cluster.local")
+	devEnvCodeServerPort, err := env.Int("ANIMUS_DEVENV_CODE_SERVER_PORT", 8080)
+	if err != nil {
+		logger.Error("invalid devenv code server port", "error", err)
 		os.Exit(2)
 	}
 
@@ -282,6 +298,10 @@ func main() {
 		webhookCfg,
 		devEnvDefaultTTL,
 		devEnvAccessTTL,
+		devEnvAccessAuditInterval,
+		devEnvRepoAllowlist,
+		devEnvServiceDomain,
+		devEnvCodeServerPort,
 	)
 	api.register(mux)
 

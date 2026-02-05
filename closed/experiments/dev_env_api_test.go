@@ -60,7 +60,7 @@ func TestDevEnvCreateIdempotent(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /projects/{project_id}/dev-environments", api.handleCreateDevEnvironment)
 
-	body := `{"templateRef":"tmpl-1","ttlSeconds":3600}`
+	body := `{"templateRef":"tmpl-1","repoUrl":"https://github.com/acme/repo","refType":"branch","refValue":"main","ttlSeconds":3600}`
 	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/dev-environments", bytes.NewBufferString(body))
 	req.Header.Set("Idempotency-Key", "idem-1")
 	req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "user-1"}))
@@ -120,7 +120,7 @@ func TestDevEnvAccessEmitsAudit(t *testing.T) {
 		devEnvAccessTTL:            5 * time.Minute,
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/dev-environments/dev-1:access", bytes.NewBufferString(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/devenvs/dev-1:open-ide-session", bytes.NewBufferString(`{}`))
 	req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "user-1"}))
 	resp := httptest.NewRecorder()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,11 +136,8 @@ func TestDevEnvAccessEmitsAudit(t *testing.T) {
 	if len(sessions.sessions) != 1 {
 		t.Fatalf("expected session insert")
 	}
-	if audit.count(auditDevEnvAccessIssued) != 1 {
-		t.Fatalf("expected access issued audit")
-	}
-	if audit.count(auditDevEnvAccessProxy) != 1 {
-		t.Fatalf("expected access proxy audit")
+	if audit.count(auditDevEnvSessionOpened) != 1 {
+		t.Fatalf("expected session opened audit")
 	}
 }
 
@@ -164,7 +161,7 @@ func TestDevEnvAccessDeniedWithoutRBAC(t *testing.T) {
 		},
 	}.Wrap(handler)
 
-	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/dev-environments/dev-1:access", bytes.NewBufferString(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/devenvs/dev-1:open-ide-session", bytes.NewBufferString(`{}`))
 	resp := httptest.NewRecorder()
 	h.ServeHTTP(resp, req)
 
@@ -173,5 +170,41 @@ func TestDevEnvAccessDeniedWithoutRBAC(t *testing.T) {
 	}
 	if store.getCalls != 0 {
 		t.Fatalf("handler should not be invoked when unauthorized")
+	}
+}
+
+func TestDevEnvCreateRejectsRepoAllowlist(t *testing.T) {
+	store := newStubDevEnvStore()
+	policyStore := &stubDevEnvPolicyStore{}
+	audit := &captureAudit{}
+	dp := &stubDevEnvDPClient{provisionResp: dataplane.DevEnvProvisionResponse{Accepted: true, JobName: "job-1", Namespace: "ns"}}
+	envDef := testEnvDefinition()
+
+	api := &experimentsAPI{
+		devEnvStoreOverride:        store,
+		devEnvPolicyStoreOverride:  policyStore,
+		devEnvSessionStoreOverride: &stubDevEnvSessionStore{},
+		devEnvDPClientOverride:     dp,
+		devEnvAuditOverride:        audit,
+		environmentStoreOverride:   stubEnvDefinitionStore{record: postgres.EnvironmentDefinitionRecord{Definition: envDef}},
+		devEnvPolicySnapshotOverride: func(ctx context.Context, projectID string, identity auth.Identity, envLock domain.EnvLock) (domain.PolicySnapshot, error) {
+			return testPolicySnapshot(), nil
+		},
+		devEnvDefaultTTL:    time.Hour,
+		devEnvRepoAllowlist: []repoAllowlistEntry{{host: "github.com", pathPrefix: "allowed"}},
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /projects/{project_id}/dev-environments", api.handleCreateDevEnvironment)
+
+	body := `{"templateRef":"tmpl-1","repoUrl":"https://github.com/other/repo","refType":"branch","refValue":"main","ttlSeconds":3600}`
+	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/dev-environments", bytes.NewBufferString(body))
+	req.Header.Set("Idempotency-Key", "idem-1")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "user-1"}))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusForbidden {
+		t.Fatalf("status=%d want 403", resp.Code)
 	}
 }

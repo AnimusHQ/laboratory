@@ -92,7 +92,7 @@ func (s *stubDevEnvStore) UpdateState(ctx context.Context, projectID, devEnvID, 
 	return true, nil
 }
 
-func (s *stubDevEnvStore) UpdateLastAccess(ctx context.Context, projectID, devEnvID string, accessedAt time.Time) (bool, error) {
+func (s *stubDevEnvStore) UpdateLastAccess(ctx context.Context, projectID, devEnvID string, accessedAt time.Time, minInterval time.Duration) (bool, error) {
 	s.lastAccessCnt++
 	record, ok := s.records[devEnvID]
 	if !ok || record.Environment.ProjectID != projectID {
@@ -130,15 +130,27 @@ func (s *stubDevEnvPolicyStore) GetSHA(ctx context.Context, projectID, devEnvID 
 
 type stubDevEnvSessionStore struct {
 	sessions []domain.DevEnvAccessSession
+	byID     map[string]domain.DevEnvAccessSession
 }
 
 func (s *stubDevEnvSessionStore) Insert(ctx context.Context, session domain.DevEnvAccessSession, integritySHA string) error {
 	s.sessions = append(s.sessions, session)
+	if s.byID == nil {
+		s.byID = make(map[string]domain.DevEnvAccessSession)
+	}
+	s.byID[session.SessionID] = session
 	return nil
 }
 
 func (s *stubDevEnvSessionStore) GetBySessionID(ctx context.Context, projectID, sessionID string) (domain.DevEnvAccessSession, error) {
-	return domain.DevEnvAccessSession{}, repo.ErrNotFound
+	if s.byID == nil {
+		return domain.DevEnvAccessSession{}, repo.ErrNotFound
+	}
+	session, ok := s.byID[sessionID]
+	if !ok || session.ProjectID != projectID {
+		return domain.DevEnvAccessSession{}, repo.ErrNotFound
+	}
+	return session, nil
 }
 
 type stubDevEnvDPClient struct {

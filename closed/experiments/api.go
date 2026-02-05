@@ -55,6 +55,11 @@ type experimentsAPI struct {
 
 	devEnvDefaultTTL             time.Duration
 	devEnvAccessTTL              time.Duration
+	devEnvAccessAuditInterval    time.Duration
+	devEnvRepoAllowlist          []repoAllowlistEntry
+	devEnvServiceDomain          string
+	devEnvCodeServerPort         int
+	devEnvProxyTransport         http.RoundTripper
 	devEnvStoreOverride          devEnvironmentStore
 	devEnvPolicyStoreOverride    devEnvPolicyStore
 	devEnvSessionStoreOverride   devEnvSessionStore
@@ -96,28 +101,45 @@ func newExperimentsAPI(
 	webhookConfig webhooks.Config,
 	devEnvDefaultTTL time.Duration,
 	devEnvAccessTTL time.Duration,
+	devEnvAccessAuditInterval time.Duration,
+	devEnvRepoAllowlist []repoAllowlistEntry,
+	devEnvServiceDomain string,
+	devEnvCodeServerPort int,
 ) *experimentsAPI {
+	if devEnvAccessAuditInterval <= 0 {
+		devEnvAccessAuditInterval = time.Minute
+	}
+	if devEnvCodeServerPort <= 0 {
+		devEnvCodeServerPort = 8080
+	}
+	if strings.TrimSpace(devEnvServiceDomain) == "" {
+		devEnvServiceDomain = "svc.cluster.local"
+	}
 	return &experimentsAPI{
-		logger:                 logger,
-		db:                     db,
-		store:                  store,
-		storeCfg:               storeCfg,
-		ciWebhookSecret:        strings.TrimSpace(ciWebhookSecret),
-		ciWebhookMaxSkew:       5 * time.Minute,
-		runTokenSecret:         strings.TrimSpace(runTokenSecret),
-		runTokenTTL:            runTokenTTL,
-		datapilotURL:           strings.TrimSpace(datapilotURL),
-		dataplaneURL:           strings.TrimSpace(dataplaneURL),
-		evidenceSigningSecret:  strings.TrimSpace(evidenceSigningSecret),
-		gitlabWebhookSecret:    strings.TrimSpace(gitlabWebhookSecret),
-		trainingExecutor:       trainingExecutor,
-		trainingNamespace:      strings.TrimSpace(trainingNamespace),
-		webhookConfig:          webhookConfig,
-		registryPolicyResolver: registryPolicyResolver,
-		registryVerifyTimeout:  registryVerifyTimeout,
-		registryProviders:      registryProviders,
-		devEnvDefaultTTL:       devEnvDefaultTTL,
-		devEnvAccessTTL:        devEnvAccessTTL,
+		logger:                    logger,
+		db:                        db,
+		store:                     store,
+		storeCfg:                  storeCfg,
+		ciWebhookSecret:           strings.TrimSpace(ciWebhookSecret),
+		ciWebhookMaxSkew:          5 * time.Minute,
+		runTokenSecret:            strings.TrimSpace(runTokenSecret),
+		runTokenTTL:               runTokenTTL,
+		datapilotURL:              strings.TrimSpace(datapilotURL),
+		dataplaneURL:              strings.TrimSpace(dataplaneURL),
+		evidenceSigningSecret:     strings.TrimSpace(evidenceSigningSecret),
+		gitlabWebhookSecret:       strings.TrimSpace(gitlabWebhookSecret),
+		trainingExecutor:          trainingExecutor,
+		trainingNamespace:         strings.TrimSpace(trainingNamespace),
+		webhookConfig:             webhookConfig,
+		registryPolicyResolver:    registryPolicyResolver,
+		registryVerifyTimeout:     registryVerifyTimeout,
+		registryProviders:         registryProviders,
+		devEnvDefaultTTL:          devEnvDefaultTTL,
+		devEnvAccessTTL:           devEnvAccessTTL,
+		devEnvAccessAuditInterval: devEnvAccessAuditInterval,
+		devEnvRepoAllowlist:       devEnvRepoAllowlist,
+		devEnvServiceDomain:       strings.TrimSpace(devEnvServiceDomain),
+		devEnvCodeServerPort:      devEnvCodeServerPort,
 	}
 }
 
@@ -163,6 +185,12 @@ func (api *experimentsAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /projects/{project_id}/dev-environments/{dev_env_id}", api.handleGetDevEnvironment)
 	mux.HandleFunc("POST /projects/{project_id}/dev-environments/{dev_env_id}:access", api.handleAccessDevEnvironment)
 	mux.HandleFunc("POST /projects/{project_id}/dev-environments/{dev_env_id}:stop", api.handleStopDevEnvironment)
+	mux.HandleFunc("POST /projects/{project_id}/devenvs", api.handleCreateDevEnvironment)
+	mux.HandleFunc("GET /projects/{project_id}/devenvs", api.handleListDevEnvironments)
+	mux.HandleFunc("GET /projects/{project_id}/devenvs/{dev_env_id}", api.handleGetDevEnvironment)
+	mux.HandleFunc("POST /projects/{project_id}/devenvs/{dev_env_id}:open-ide-session", api.handleAccessDevEnvironment)
+	mux.HandleFunc("POST /projects/{project_id}/devenvs/{dev_env_id}:stop", api.handleStopDevEnvironment)
+	mux.HandleFunc("GET /devenv-sessions/{session_id}/proxy/{path...}", api.handleDevEnvProxy)
 	mux.HandleFunc("POST /projects/{project_id}/webhooks/subscriptions", api.handleCreateWebhookSubscription)
 	mux.HandleFunc("GET /projects/{project_id}/webhooks/subscriptions", api.handleListWebhookSubscriptions)
 	mux.HandleFunc("PATCH /projects/{project_id}/webhooks/subscriptions/{subscription_id}", api.handleUpdateWebhookSubscription)
