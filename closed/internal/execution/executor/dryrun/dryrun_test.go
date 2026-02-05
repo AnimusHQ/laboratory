@@ -9,6 +9,7 @@ import (
 	"github.com/animus-labs/animus-go/closed/internal/domain"
 	executor "github.com/animus-labs/animus-go/closed/internal/execution/executor"
 	"github.com/animus-labs/animus-go/closed/internal/repo"
+	"github.com/animus-labs/animus-go/closed/internal/testsupport"
 )
 
 func TestDryRunDeterministic(t *testing.T) {
@@ -142,14 +143,25 @@ func samplePlan(stepCount int, maxAttempts int) domain.ExecutionPlan {
 }
 
 type memoryRepo struct {
-	records map[string]repo.StepExecutionRecord
+	records  map[string]repo.StepExecutionRecord
+	injector *testsupport.ErrorInjector
 }
 
 func newMemoryRepo() *memoryRepo {
-	return &memoryRepo{records: map[string]repo.StepExecutionRecord{}}
+	return newMemoryRepoWithInjector(nil)
+}
+
+func newMemoryRepoWithInjector(injector *testsupport.ErrorInjector) *memoryRepo {
+	return &memoryRepo{
+		records:  map[string]repo.StepExecutionRecord{},
+		injector: injector,
+	}
 }
 
 func (m *memoryRepo) InsertAttempt(ctx context.Context, record repo.StepExecutionRecord) (repo.StepExecutionRecord, bool, error) {
+	if err := m.injector.Check("insert_attempt"); err != nil {
+		return repo.StepExecutionRecord{}, false, err
+	}
 	key := record.ProjectID + "/" + record.RunID + "/" + record.StepName + "/" + itoa(record.Attempt)
 	if existing, ok := m.records[key]; ok {
 		return existing, false, nil
@@ -179,6 +191,61 @@ func (m *memoryRepo) ListByRun(ctx context.Context, projectID, runID string) ([]
 
 func (m *memoryRepo) count() int {
 	return len(m.records)
+}
+
+func TestDryRunIdempotentOnRepeat(t *testing.T) {
+	plan := samplePlan(1, 2)
+	input := executor.DryRunInput{
+		ProjectID: "proj-1",
+		RunID:     "run-1",
+		SpecHash:  "spec-hash",
+		Plan:      plan,
+	}
+	repo := newMemoryRepo()
+	exec := New(repo)
+	exec.now = func() time.Time { return time.Date(2026, 2, 1, 8, 0, 0, 0, time.UTC) }
+
+	if _, err := exec.DryRun(context.Background(), input); err != nil {
+		t.Fatalf("first dry run: %v", err)
+	}
+	records := repo.count()
+	if records == 0 {
+		t.Fatalf("expected records after first dry run")
+	}
+	if _, err := exec.DryRun(context.Background(), input); err != nil {
+		t.Fatalf("second dry run: %v", err)
+	}
+	if repo.count() != records {
+		t.Fatalf("expected idempotent inserts, got %d -> %d", records, repo.count())
+	}
+}
+
+func TestDryRunRetriesAfterTransientInsertError(t *testing.T) {
+	plan := samplePlan(1, 1)
+	input := executor.DryRunInput{
+		ProjectID: "proj-1",
+		RunID:     "run-1",
+		SpecHash:  "spec-hash",
+		Plan:      plan,
+	}
+	injector := testsupport.NewErrorInjector(context.DeadlineExceeded)
+	injector.FailOn("insert_attempt", 1)
+	repo := newMemoryRepoWithInjector(injector)
+	exec := New(repo)
+	exec.now = func() time.Time { return time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC) }
+
+	if _, err := exec.DryRun(context.Background(), input); err == nil {
+		t.Fatalf("expected transient error on first dry run")
+	}
+	if repo.count() != 0 {
+		t.Fatalf("expected no records after failed insert, got %d", repo.count())
+	}
+	if _, err := exec.DryRun(context.Background(), input); err != nil {
+		t.Fatalf("second dry run: %v", err)
+	}
+	if repo.count() == 0 {
+		t.Fatalf("expected records after retry")
+	}
 }
 
 func itoa(value int) string {

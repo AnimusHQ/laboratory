@@ -119,3 +119,30 @@ func TestRegistryDenyUnsignedBlocks(t *testing.T) {
 		t.Fatalf("expected failed status, got %s", store.records[0].Status)
 	}
 }
+
+func TestRegistryDenyUnsignedProviderErrorBlocks(t *testing.T) {
+	store := &stubImageVerificationStore{}
+	provider := stubRegistryProvider{err: context.DeadlineExceeded}
+	api := &experimentsAPI{
+		registryPolicyResolver: registryverify.PolicyResolver{Default: registryverify.Policy{Mode: registryverify.ModeDenyUnsigned, Provider: "stub"}},
+		registryProviders:      map[string]registryverify.Provider{"stub": provider},
+		registryStoreOverride:  store,
+	}
+	images := []domain.EnvironmentImage{{Name: "runtime", Ref: "ghcr.io/acme/runtime:latest", Digest: "sha256:dddddddd"}}
+	allowed, reason, err := api.verifyRegistryImages(context.Background(), auth.Identity{Subject: "tester"}, "proj-1", "lock-4", images, "req-4")
+	if err != nil {
+		t.Fatalf("verify registry images: %v", err)
+	}
+	if allowed || reason != registryBlockReasonUnsigned {
+		t.Fatalf("expected blocked on provider error, got allowed=%v reason=%q", allowed, reason)
+	}
+	if len(store.records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(store.records))
+	}
+	if store.records[0].Status != registryverify.StatusFailed {
+		t.Fatalf("expected failed status, got %s", store.records[0].Status)
+	}
+	if store.records[0].FailureReason != "provider_error" {
+		t.Fatalf("expected provider_error failure reason, got %s", store.records[0].FailureReason)
+	}
+}
