@@ -1,29 +1,66 @@
 # DR Game‑Day (шаблон)
 
-## Цель
-Проверить, что восстановление платформы выполняется в пределах целевых RPO/RTO.
+## 1. Цель
+Проверить, что восстановление платформы выполняется в пределах целевых RPO/RTO и соответствует критериям целостности.
 
-## Подготовка
-1. Убедитесь, что есть свежий бэкап Postgres и MinIO/S3.
-2. Зафиксируйте версии chart‑ов и digests образов.
-3. Запланируйте окно и предупредите пользователей.
+## 2. Предпосылки
+- Свежий бэкап Postgres и MinIO/S3.
+- Зафиксированные версии chart‑ов и digests образов.
+- Доступ к cluster‑контролю (kubectl/helm).
+- Токен и проект для post‑restore проверок.
 
-## Сценарий
-1. Остановите CP/DP (scale to 0).
-2. Восстановите Postgres из бэкапа.
-3. Восстановите buckets (`datasets`, `artifacts`).
-4. Запустите CP/DP заново.
-5. Проверьте `/readyz` всех сервисов.
-6. Запустите детерминированный E2E‑тест:
+## 3. Сценарий (последовательность)
+1. Зафиксировать время инцидента `T_incident`.
+2. Остановить CP/DP:
+```bash
+kubectl -n <ns> scale deploy/<cp-deploy> --replicas=0
+kubectl -n <ns> scale deploy/<dp-deploy> --replicas=0
+```
+3. Восстановить Postgres и MinIO/S3:
+```bash
+BACKUP_DIR=/secure/backups/<timestamp> \
+DATABASE_URL="postgres://..." \
+ANIMUS_MINIO_ENDPOINT="s3.example" \
+ANIMUS_MINIO_ACCESS_KEY="..." \
+ANIMUS_MINIO_SECRET_KEY="..." \
+ANIMUS_MINIO_BUCKETS="datasets artifacts" \
+closed/scripts/restore.sh
+```
+4. Запустить CP/DP:
+```bash
+kubectl -n <ns> scale deploy/<cp-deploy> --replicas=1
+kubectl -n <ns> scale deploy/<dp-deploy> --replicas=1
+```
+5. Проверить готовность (`/readyz`) и выполнить smoke‑проверку:
+```bash
+ANIMUS_GATEWAY_URL="https://gateway.example" \
+ANIMUS_DR_TOKEN="..." \
+ANIMUS_DR_PROJECT_ID="proj-1" \
+closed/scripts/verify-restore.sh
+```
+6. (Опционально) Запустить E2E‑набор при наличии инфраструктуры:
 ```bash
 make e2e
 ```
 
-## Контрольные точки
-- База на ожидаемой версии миграций.
-- Проверка наличия наборов данных и артефактов.
-- Проверка работы Model Registry (create → approve → export).
+## 4. Контрольные точки
+- База данных восстановлена и доступна для чтения/записи.
+- Наборы данных и артефакты доступны (upload → download).
+- Работоспособность модели: create → approve → export (при наличии тестовых данных).
+- `/healthz` и `/readyz` возвращают `200`.
 
-## Итог
+## 5. Ожидаемые результаты
+- Время восстановления `T_restore_done` зафиксировано.
+- RPO/RTO вычислены по формулам из `docs/ops/backup-restore.md`.
+- Наблюдаемость без утечки секретов (логи и отчёт без секретов).
+
+## 6. Откат (rollback)
+Если проверка не проходит:
+1. Остановить CP/DP.
+2. Восстановить последний корректный бэкап.
+3. Повторить `verify-restore.sh`.
+4. Зафиксировать причину отклонения и обновить runbook.
+
+## 7. Итог
 - Зафиксировать фактические RPO/RTO.
-- Обновить runbook при отклонениях.
+- Сформировать отчёт `docs/ops/dr-gameday-report.md` или приложить ссылку на отчёт в `docs/ops/reports/`.
