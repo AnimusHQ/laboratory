@@ -23,7 +23,8 @@ type Config struct {
 }
 
 func Wrap(logger *slog.Logger, service string, next http.Handler) http.Handler {
-	return recoverMiddleware(logger, requestLogMiddleware(logger, requestIDMiddleware(service, next)))
+	ensureHTTPMetricsRegistered()
+	return recoverMiddleware(logger, requestLogMiddleware(logger, service, requestIDMiddleware(service, next)))
 }
 
 func Run(ctx context.Context, logger *slog.Logger, cfg Config, handler http.Handler) error {
@@ -206,7 +207,7 @@ func (w *statusWriter) ReadFrom(r io.Reader) (int64, error) {
 	return io.Copy(w.ResponseWriter, r)
 }
 
-func requestLogMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
+func requestLogMiddleware(logger *slog.Logger, service string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
@@ -214,6 +215,7 @@ func requestLogMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 
 		requestID, _ := RequestIDFromContext(r.Context())
+		recordHTTPMetrics(service, r.Method, sw.status, time.Since(start))
 		attrs := []any{
 			"request_id", requestID,
 			"method", r.Method,
