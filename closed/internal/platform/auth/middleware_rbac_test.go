@@ -1,4 +1,4 @@
-package auth
+package auth_test
 
 import (
 	"context"
@@ -6,9 +6,21 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/animus-labs/animus-go/closed/internal/platform/auth"
 	"github.com/animus-labs/animus-go/closed/internal/platform/rbac"
 	"github.com/animus-labs/animus-go/closed/internal/repo"
 )
+
+type testAuthenticator struct {
+	identity auth.Identity
+	err      error
+	calls    int
+}
+
+func (a *testAuthenticator) Authenticate(ctx context.Context, r *http.Request) (auth.Identity, error) {
+	a.calls++
+	return a.identity, a.err
+}
 
 type stubBindingStore struct {
 	rolesByProject map[string][]repo.RoleBindingRecord
@@ -28,16 +40,16 @@ func (s stubBindingStore) ListBySubjects(ctx context.Context, projectID string, 
 func TestMiddleware_DeniesCrossProjectAccess(t *testing.T) {
 	store := stubBindingStore{
 		rolesByProject: map[string][]repo.RoleBindingRecord{
-			"proj-1": {{Role: RoleAdmin}},
+			"proj-1": {{Role: auth.RoleAdmin}},
 		},
 	}
 	authorizer := rbac.Authorizer{Store: store, AllowDirect: false}
-	authn := &testAuthenticator{identity: Identity{Subject: "user-1"}}
+	authn := &testAuthenticator{identity: auth.Identity{Subject: "user-1"}}
 
-	h := Middleware{
+	h := auth.Middleware{
 		Authenticator: authn,
 		Authorize:     authorizer.Authorize,
-		ProjectResolve: func(r *http.Request, identity Identity) (string, error) {
+		ProjectResolve: func(r *http.Request, identity auth.Identity) (string, error) {
 			return "proj-2", nil
 		},
 	}.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,16 +69,16 @@ func TestMiddleware_DeniesCrossProjectAccess(t *testing.T) {
 func TestMiddleware_DeniesRoleDowngrade(t *testing.T) {
 	store := stubBindingStore{
 		rolesByProject: map[string][]repo.RoleBindingRecord{
-			"proj-1": {{Role: RoleViewer}},
+			"proj-1": {{Role: auth.RoleViewer}},
 		},
 	}
 	authorizer := rbac.Authorizer{Store: store, AllowDirect: false}
-	authn := &testAuthenticator{identity: Identity{Subject: "user-1"}}
+	authn := &testAuthenticator{identity: auth.Identity{Subject: "user-1"}}
 
-	h := Middleware{
+	h := auth.Middleware{
 		Authenticator: authn,
 		Authorize:     authorizer.Authorize,
-		ProjectResolve: func(r *http.Request, identity Identity) (string, error) {
+		ProjectResolve: func(r *http.Request, identity auth.Identity) (string, error) {
 			return "proj-1", nil
 		},
 	}.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +96,11 @@ func TestMiddleware_DeniesRoleDowngrade(t *testing.T) {
 }
 
 func TestMiddleware_ProjectRequired(t *testing.T) {
-	authn := &testAuthenticator{identity: Identity{Subject: "user-1"}}
-	h := Middleware{
+	authn := &testAuthenticator{identity: auth.Identity{Subject: "user-1"}}
+	h := auth.Middleware{
 		Authenticator: authn,
-		ProjectResolve: func(r *http.Request, identity Identity) (string, error) {
-			return "", ErrProjectRequired
+		ProjectResolve: func(r *http.Request, identity auth.Identity) (string, error) {
+			return "", auth.ErrProjectRequired
 		},
 	}.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
