@@ -1,5 +1,15 @@
+import Link from 'next/link';
+
+import { ErrorState } from '@/components/console/error-state';
+import { PipelineGraph } from '@/components/console/pipeline-graph';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { PageHeader, PageSection, PageShell } from '@/components/ui/page-shell';
+import { GatewayAPIError } from '@/lib/gateway-client';
+import type { components } from '@/lib/gateway-openapi';
+import { getActiveProjectId } from '@/lib/server-context';
+import { gatewayServerFetchJSON } from '@/lib/server-gateway';
+
+import { PipelineSelector } from './pipeline-selector';
 
 const copy = {
   datasets: {
@@ -42,21 +52,81 @@ const copy = {
 
 const meta = copy['pipelines' as keyof typeof copy];
 
-export default function SectionPage() {
+type SearchParams = {
+  run_id?: string;
+};
+
+export default async function PipelinesPage({ searchParams }: { searchParams: SearchParams }) {
+  const projectId = getActiveProjectId();
+  const runId = searchParams.run_id?.trim() ?? '';
+  let runSpec: components['schemas']['ProjectRunGetResponse'] | null = null;
+  let error: GatewayAPIError | null = null;
+
+  if (projectId && runId) {
+    try {
+      runSpec = await gatewayServerFetchJSON<components['schemas']['ProjectRunGetResponse']>(
+        `/api/experiments/projects/${projectId}/runs/${runId}`,
+      );
+    } catch (err) {
+      error = err instanceof GatewayAPIError ? err : new GatewayAPIError(500, 'gateway_unexpected');
+    }
+  }
+
   return (
     <PageShell>
       <PageHeader title={meta.title} description={meta.description} />
       <Card>
         <CardHeader>
-          <CardTitle>Рабочий контур</CardTitle>
-          <CardDescription>Раздел подключается к Gateway API с учётом RBAC и аудита.</CardDescription>
+          <CardTitle>DAG‑контроль</CardTitle>
+          <CardDescription>Граф пайплайна строится на основе RunSpec. Для просмотра укажите run_id.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Интерфейс выстроен по workflow‑логике. Заполнение данных и формы будут добавлены в следующих коммитах.
+            Пайплайны являются детерминированными графами исполнения. Отмена доступна через DP‑контур, консоль отображает
+            текущее состояние.
           </p>
         </CardContent>
       </Card>
+
+      <PageSection title="Выбор источника">
+        <PipelineSelector />
+        <div className="text-xs text-muted-foreground">
+          Контекст проекта: {projectId || 'не задан'} · Run ID: {runId || 'не указан'}
+        </div>
+      </PageSection>
+
+      {error ? <ErrorState code={error.code} requestId={error.requestId} status={error.status} details={error.details} /> : null}
+
+      {runSpec ? (
+        <PageSection title="DAG и шаги">
+          <PipelineGraph pipelineSpec={runSpec.runSpec.pipelineSpec ?? {}} attemptsByStep={runSpec.attemptsByStep ?? {}} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Сырые данные pipelineSpec</CardTitle>
+              <CardDescription>Полное описание графа, зафиксированное в RunSpec.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <pre className="text-xs whitespace-pre-wrap">
+                {JSON.stringify(runSpec.runSpec.pipelineSpec ?? {}, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
+        </PageSection>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Граф не загружен</CardTitle>
+            <CardDescription>
+              Укажите run_id и убедитесь, что ваш доступ включает RunRead. Создание новых RunSpec доступно в разделе запусков.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/console/runs/new" className="text-sm font-semibold text-primary">
+              Перейти к созданию RunSpec
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </PageShell>
   );
 }
