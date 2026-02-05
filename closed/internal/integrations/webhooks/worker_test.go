@@ -305,3 +305,49 @@ func TestWorkerRetryOnTransportError(t *testing.T) {
 		t.Fatalf("expected pending status on transport error")
 	}
 }
+
+func TestWorkerRetryStormIncrementsAttempts(t *testing.T) {
+	now := time.Date(2025, 2, 1, 12, 0, 0, 0, time.UTC)
+	delivery := baseDelivery(now)
+	subscription := baseSubscription()
+
+	attemptStore := &stubAttemptStore{}
+	deliveryStore := &stubDeliveryStore{}
+	worker := NewWorker(stubSubscriptionStore{sub: subscription}, deliveryStore, attemptStore, secrets.NoopManager{}, nil, nil, Config{
+		EnabledFlag:    true,
+		MaxAttempts:    5,
+		RetryBaseDelay: time.Second,
+		RetryMaxDelay:  10 * time.Second,
+	})
+	worker.now = func() time.Time { return now }
+	worker.client = &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Body:       io.NopCloser(bytes.NewBufferString("fail")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	worker.processDelivery(context.Background(), delivery)
+	if len(deliveryStore.updated) != 1 {
+		t.Fatalf("expected delivery update after first retry, got %d", len(deliveryStore.updated))
+	}
+	first := deliveryStore.updated[0]
+	if first.AttemptCount != 1 || first.Status != DeliveryStatusPending {
+		t.Fatalf("expected attempt_count=1 pending, got %d %s", first.AttemptCount, first.Status)
+	}
+
+	worker.processDelivery(context.Background(), first)
+	if len(deliveryStore.updated) != 2 {
+		t.Fatalf("expected delivery update after second retry, got %d", len(deliveryStore.updated))
+	}
+	second := deliveryStore.updated[1]
+	if second.AttemptCount != 2 {
+		t.Fatalf("expected attempt_count=2, got %d", second.AttemptCount)
+	}
+	if !second.NextAttemptAt.After(first.NextAttemptAt) {
+		t.Fatalf("expected next_attempt to increase on retry storm")
+	}
+}

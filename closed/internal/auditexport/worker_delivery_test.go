@@ -3,6 +3,7 @@ package auditexport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -15,6 +16,8 @@ type stubDeliveryStore struct {
 	claimed     bool
 	markDLQ     bool
 	markDeliver bool
+	markRetry   bool
+	retryError  string
 }
 
 func (s *stubDeliveryStore) Backfill(ctx context.Context, sinkID string) error { return nil }
@@ -30,6 +33,8 @@ func (s *stubDeliveryStore) MarkDelivered(ctx context.Context, deliveryID int64,
 	return nil
 }
 func (s *stubDeliveryStore) MarkRetry(ctx context.Context, deliveryID int64, lastError string, nextAttemptAt time.Time) error {
+	s.markRetry = true
+	s.retryError = lastError
 	return nil
 }
 func (s *stubDeliveryStore) MarkDLQ(ctx context.Context, deliveryID int64, reason string, lastError string, at time.Time) error {
@@ -75,9 +80,13 @@ func (s *stubSinkStore) ListSinks(ctx context.Context, limit int) ([]Sink, error
 
 type stubEventStore struct {
 	event domain.AuditEvent
+	err   error
 }
 
 func (s *stubEventStore) GetEvent(ctx context.Context, eventID int64) (domain.AuditEvent, error) {
+	if s.err != nil {
+		return domain.AuditEvent{}, s.err
+	}
 	return s.event, nil
 }
 
@@ -120,5 +129,25 @@ func TestWorkerMarksDeliveredOnSuccess(t *testing.T) {
 	}
 	if !attemptStore.inserted {
 		t.Fatalf("expected attempt inserted")
+	}
+}
+
+func TestWorkerRetriesWhenEventUnavailable(t *testing.T) {
+	cfg := Config{Destination: "webhook", MaxAttempts: 3, RetryBaseDelay: time.Second, RetryMaxDelay: time.Second}
+	payloadCfg := SinkConfig{WebhookURL: "https://example.test"}
+	cfgBlob, _ := json.Marshal(payloadCfg)
+	deliveryStore := &stubDeliveryStore{deliveries: []Delivery{{DeliveryID: 3, SinkID: "sink", EventID: 12, AttemptCount: 0}}}
+	attemptStore := &stubAttemptStore{}
+	sinkStore := &stubSinkStore{sink: Sink{SinkID: "sink", Destination: "webhook", Format: "ndjson", Config: cfgBlob, Enabled: true}}
+	eventStore := &stubEventStore{err: errors.New("db timeout")}
+
+	worker := NewWorker(deliveryStore, attemptStore, sinkStore, eventStore, nil, nil, cfg, WorkerDeps{})
+	worker.processOnce(context.Background())
+
+	if !deliveryStore.markRetry {
+		t.Fatalf("expected delivery to be scheduled for retry")
+	}
+	if deliveryStore.markDLQ || deliveryStore.markDeliver {
+		t.Fatalf("expected retry only, got dlq=%v delivered=%v", deliveryStore.markDLQ, deliveryStore.markDeliver)
 	}
 }
