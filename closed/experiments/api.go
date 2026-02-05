@@ -63,6 +63,9 @@ type experimentsAPI struct {
 	environmentStoreOverride     environmentStore
 	devEnvPolicySnapshotOverride devEnvPolicySnapshotBuilder
 
+	roleBindingStoreOverride roleBindingStore
+	roleBindingAuditOverride repo.AuditEventAppender
+
 	modelStoreOverride             modelStore
 	modelVersionStoreOverride      modelVersionStore
 	modelVersionTransitionOverride modelVersionTransitionStore

@@ -24,6 +24,7 @@ type Config struct {
 	Mode Mode
 
 	RolesClaim string
+	GroupsClaim string
 	EmailClaim string
 
 	SessionCookieName     string
@@ -32,6 +33,7 @@ type Config struct {
 	SessionCookieSameSite string
 	SessionMaxConcurrent  int
 	RBACAllowDirectRoles  bool
+	GroupRoleMap          map[string]string
 
 	OIDCIssuerURL    string
 	OIDCClientID     string
@@ -76,10 +78,15 @@ func ConfigFromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	groupRoleMap, err := parseGroupRoleMap(env.String("AUTH_GROUP_ROLE_MAP", ""))
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		Mode:                  mode,
 		RolesClaim:            env.String("AUTH_ROLES_CLAIM", "roles"),
+		GroupsClaim:           env.String("AUTH_GROUPS_CLAIM", "groups"),
 		EmailClaim:            env.String("AUTH_EMAIL_CLAIM", "email"),
 		SessionCookieName:     env.String("AUTH_SESSION_COOKIE_NAME", "animus_session"),
 		SessionCookieSecure:   sessionCookieSecure,
@@ -87,6 +94,7 @@ func ConfigFromEnv() (Config, error) {
 		SessionCookieSameSite: env.String("AUTH_SESSION_COOKIE_SAMESITE", "Lax"),
 		SessionMaxConcurrent:  sessionMaxConcurrent,
 		RBACAllowDirectRoles:  rbacAllowDirect,
+		GroupRoleMap:          groupRoleMap,
 		OIDCIssuerURL:         env.String("OIDC_ISSUER_URL", ""),
 		OIDCClientID:          env.String("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:      env.String("OIDC_CLIENT_SECRET", ""),
@@ -108,6 +116,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.RolesClaim) == "" {
 		return errors.New("AUTH_ROLES_CLAIM is required")
+	}
+	if len(c.GroupRoleMap) > 0 && strings.TrimSpace(c.GroupsClaim) == "" {
+		return errors.New("AUTH_GROUPS_CLAIM is required when AUTH_GROUP_ROLE_MAP is set")
 	}
 	if strings.TrimSpace(c.EmailClaim) == "" {
 		return errors.New("AUTH_EMAIL_CLAIM is required")
@@ -169,6 +180,38 @@ func parseScopes(value string) []string {
 		return []string{"openid", "profile", "email"}
 	}
 	return fields
+}
+
+func parseGroupRoleMap(raw string) (map[string]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	entries := strings.Split(raw, ",")
+	out := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		sep := strings.IndexAny(entry, "=:")
+		if sep <= 0 || sep >= len(entry)-1 {
+			return nil, fmt.Errorf("invalid group-role mapping: %q", entry)
+		}
+		group := strings.ToLower(strings.TrimSpace(entry[:sep]))
+		role := strings.ToLower(strings.TrimSpace(entry[sep+1:]))
+		if group == "" || role == "" {
+			return nil, fmt.Errorf("invalid group-role mapping: %q", entry)
+		}
+		switch role {
+		case RoleViewer, RoleEditor, RoleAdmin:
+			// ok
+		default:
+			return nil, fmt.Errorf("invalid group-role mapping role: %q", role)
+		}
+		out[group] = role
+	}
+	return out, nil
 }
 
 func parseCSV(value string) []string {

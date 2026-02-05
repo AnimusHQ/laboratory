@@ -89,15 +89,7 @@ func (s *OIDCService) Authenticate(ctx context.Context, r *http.Request) (Identi
 		return Identity{}, err
 	}
 
-	subject, _ := claims["sub"].(string)
-	email := extractStringClaim(claims, s.cfg.EmailClaim)
-	roles := extractRolesClaim(claims, s.cfg.RolesClaim)
-
-	return Identity{
-		Subject: subject,
-		Email:   email,
-		Roles:   roles,
-	}, nil
+	return identityFromClaims(s.cfg, claims), nil
 }
 
 func (s *OIDCService) LoginHandler() (http.HandlerFunc, error) {
@@ -223,11 +215,8 @@ func (s *OIDCService) CallbackHandler() (http.HandlerFunc, error) {
 			if !idToken.Expiry.IsZero() && idToken.Expiry.Before(expiresAt) {
 				expiresAt = idToken.Expiry.UTC()
 			}
-			session, err := s.sessions.CreateSession(r.Context(), Identity{
-				Subject: extractSubjectClaim(claims),
-				Email:   extractStringClaim(claims, s.cfg.EmailClaim),
-				Roles:   extractRolesClaim(claims, s.cfg.RolesClaim),
-			}, s.cfg.OIDCIssuerURL, expiresAt, TokenSHA256(rawIDToken), meta)
+			identity := identityFromClaims(s.cfg, claims)
+			session, err := s.sessions.CreateSession(r.Context(), identity, s.cfg.OIDCIssuerURL, expiresAt, TokenSHA256(rawIDToken), meta)
 			if err != nil {
 				writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "session_create_failed"})
 				return
@@ -384,6 +373,64 @@ func parseSameSite(raw string) http.SameSite {
 	default:
 		return http.SameSiteLaxMode
 	}
+}
+
+func identityFromClaims(cfg Config, claims map[string]any) Identity {
+	return Identity{
+		Subject: extractSubjectClaim(claims),
+		Email:   extractStringClaim(claims, cfg.EmailClaim),
+		Roles:   resolveRolesFromClaims(cfg, claims),
+	}
+}
+
+func resolveRolesFromClaims(cfg Config, claims map[string]any) []string {
+	roles := extractRolesClaim(claims, cfg.RolesClaim)
+	groups := extractRolesClaim(claims, cfg.GroupsClaim)
+	mapped := mapGroupsToRoles(groups, cfg.GroupRoleMap)
+	return mergeUnique(roles, groups, mapped)
+}
+
+func mapGroupsToRoles(groups []string, mapping map[string]string) []string {
+	if len(groups) == 0 || len(mapping) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(groups))
+	seen := make(map[string]struct{})
+	for _, group := range groups {
+		key := strings.ToLower(strings.TrimSpace(group))
+		if key == "" {
+			continue
+		}
+		role, ok := mapping[key]
+		if !ok || role == "" {
+			continue
+		}
+		if _, ok := seen[role]; ok {
+			continue
+		}
+		seen[role] = struct{}{}
+		out = append(out, role)
+	}
+	return out
+}
+
+func mergeUnique(values ...[]string) []string {
+	out := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, slice := range values {
+		for _, item := range slice {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			if _, ok := seen[item]; ok {
+				continue
+			}
+			seen[item] = struct{}{}
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func extractStringClaim(claims map[string]any, key string) string {

@@ -28,3 +28,10 @@ func TestExperimentsRequiredRoleModelTransitions(t *testing.T) {
 		}
 	}
 }
+
+func TestExperimentsRequiredRoleRoleBindings(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/projects/proj-1/role-bindings", nil)
+	if got := experimentsRequiredRole(req); got != auth.RoleAdmin {
+		t.Fatalf("expected admin role, got %s", got)
+	}
+}

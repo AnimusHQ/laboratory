@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -36,6 +37,37 @@ type roleBindingResponse struct {
 
 type roleBindingListResponse struct {
 	Bindings []roleBinding `json:"bindings"`
+}
+
+type roleBindingStore interface {
+	Upsert(ctx context.Context, record repo.RoleBindingRecord) (repo.RoleBindingRecord, bool, error)
+	ListByProject(ctx context.Context, projectID string) ([]repo.RoleBindingRecord, error)
+	ListBySubjects(ctx context.Context, projectID string, subjects []repo.RoleBindingSubject) ([]repo.RoleBindingRecord, error)
+	GetByID(ctx context.Context, projectID, bindingID string) (repo.RoleBindingRecord, error)
+	Delete(ctx context.Context, projectID, bindingID string) error
+}
+
+func (api *experimentsAPI) roleBindingStore() roleBindingStore {
+	if api == nil {
+		return nil
+	}
+	if api.roleBindingStoreOverride != nil {
+		return api.roleBindingStoreOverride
+	}
+	return repopg.NewRoleBindingStore(api.db)
+}
+
+func (api *experimentsAPI) roleBindingAuditAppender() repo.AuditEventAppender {
+	if api == nil {
+		return nil
+	}
+	if api.roleBindingAuditOverride != nil {
+		return api.roleBindingAuditOverride
+	}
+	if api.db == nil {
+		return nil
+	}
+	return repopg.NewAuditAppender(api.db, nil)
 }
 
 func (api *experimentsAPI) handleUpsertRoleBinding(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +114,11 @@ func (api *experimentsAPI) handleUpsertRoleBinding(w http.ResponseWriter, r *htt
 		return
 	}
 
-	store := repopg.NewRoleBindingStore(api.db)
+	store := api.roleBindingStore()
+	if store == nil {
+		api.writeError(w, r, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	var existing *repo.RoleBindingRecord
 	current, err := store.ListBySubjects(r.Context(), projectID, []repo.RoleBindingSubject{{Type: subjectType, Value: subject}})
 	if err != nil {
@@ -159,7 +195,11 @@ func (api *experimentsAPI) handleListRoleBindings(w http.ResponseWriter, r *http
 		return
 	}
 
-	store := repopg.NewRoleBindingStore(api.db)
+	store := api.roleBindingStore()
+	if store == nil {
+		api.writeError(w, r, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	bindings, err := store.ListByProject(r.Context(), projectID)
 	if err != nil {
 		api.writeError(w, r, http.StatusInternalServerError, "internal_error")
@@ -190,7 +230,11 @@ func (api *experimentsAPI) handleDeleteRoleBinding(w http.ResponseWriter, r *htt
 		return
 	}
 
-	store := repopg.NewRoleBindingStore(api.db)
+	store := api.roleBindingStore()
+	if store == nil {
+		api.writeError(w, r, http.StatusInternalServerError, "internal_error")
+		return
+	}
 	binding, err := store.GetByID(r.Context(), projectID, bindingID)
 	if err != nil {
 		api.writeError(w, r, http.StatusNotFound, "not_found")
@@ -206,7 +250,11 @@ func (api *experimentsAPI) handleDeleteRoleBinding(w http.ResponseWriter, r *htt
 }
 
 func (api *experimentsAPI) appendAuditEvent(r *http.Request, action string, record repo.RoleBindingRecord, actor string) {
-	if api == nil || api.db == nil {
+	if api == nil {
+		return
+	}
+	appender := api.roleBindingAuditAppender()
+	if appender == nil {
 		return
 	}
 	payload := map[string]any{
@@ -217,8 +265,7 @@ func (api *experimentsAPI) appendAuditEvent(r *http.Request, action string, reco
 		"role":         record.Role,
 	}
 
-	auditAppender := repopg.NewAuditAppender(api.db, nil)
-	_, _ = auditAppender.Append(r.Context(), domain.AuditEvent{
+	_, _ = appender.Append(r.Context(), domain.AuditEvent{
 		OccurredAt:   time.Now().UTC(),
 		Actor:        strings.TrimSpace(actor),
 		Action:       action,

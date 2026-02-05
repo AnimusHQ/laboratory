@@ -36,3 +36,23 @@ func TestConfigFromEnv_OIDC_RequiresIssuerAndClientID(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
+
+func TestParseGroupRoleMap(t *testing.T) {
+	parsed, err := parseGroupRoleMap("ml-admin=admin,ml-edit:editor")
+	if err != nil {
+		t.Fatalf("parseGroupRoleMap err=%v", err)
+	}
+	if parsed["ml-admin"] != RoleAdmin {
+		t.Fatalf("expected ml-admin -> admin, got %q", parsed["ml-admin"])
+	}
+	if parsed["ml-edit"] != RoleEditor {
+		t.Fatalf("expected ml-edit -> editor, got %q", parsed["ml-edit"])
+	}
+
+	if _, err := parseGroupRoleMap("broken"); err == nil {
+		t.Fatalf("expected error for invalid mapping")
+	}
+	if _, err := parseGroupRoleMap("team=unknown"); err == nil {
+		t.Fatalf("expected error for invalid role")
+	}
+}
