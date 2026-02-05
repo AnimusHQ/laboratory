@@ -14,3 +14,17 @@ func TestExperimentsRequiredRoleWebhooks(t *testing.T) {
 		t.Fatalf("expected admin role, got %s", got)
 	}
 }
+
+func TestExperimentsRequiredRoleModelTransitions(t *testing.T) {
+	paths := []string{
+		"/projects/proj-1/model-versions/ver-1:approve",
+		"/projects/proj-1/model-versions/ver-1:deprecate",
+		"/projects/proj-1/model-versions/ver-1:export",
+	}
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		if got := experimentsRequiredRole(req); got != auth.RoleAdmin {
+			t.Fatalf("path %s expected admin role, got %s", path, got)
+		}
+	}
+}

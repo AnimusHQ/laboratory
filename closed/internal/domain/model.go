@@ -18,16 +18,16 @@ const (
 
 // Model is a versioned model entity with lifecycle state.
 type Model struct {
-	ID              string
-	ProjectID       string
-	Name            string
-	Version         string
-	Status          ModelStatus
-	ArtifactID      string
-	Metadata        Metadata
-	CreatedAt       time.Time
-	CreatedBy       string
-	IntegritySHA256 string
+	ID              string      `json:"modelId"`
+	ProjectID       string      `json:"projectId"`
+	Name            string      `json:"name"`
+	Version         string      `json:"version"`
+	Status          ModelStatus `json:"status"`
+	ArtifactID      string      `json:"artifactId,omitempty"`
+	Metadata        Metadata    `json:"metadata,omitempty"`
+	CreatedAt       time.Time   `json:"createdAt"`
+	CreatedBy       string      `json:"createdBy,omitempty"`
+	IntegritySHA256 string      `json:"integritySha256,omitempty"`
 }
 
 func (m Model) Validate() error {

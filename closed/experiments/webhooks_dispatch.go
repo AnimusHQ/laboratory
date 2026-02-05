@@ -19,6 +19,14 @@ func (api *experimentsAPI) enqueueWebhookRunFinished(ctx context.Context, actor,
 	return api.enqueueWebhookPayload(ctx, actor, requestID, payload)
 }
 
+func (api *experimentsAPI) enqueueWebhookModelApproved(ctx context.Context, actor, requestID, projectID, modelVersionID string, emittedAt time.Time) error {
+	payload, err := webhooks.ModelApprovedPayload(projectID, modelVersionID, emittedAt)
+	if err != nil {
+		return err
+	}
+	return api.enqueueWebhookPayload(ctx, actor, requestID, payload)
+}
+
 func (api *experimentsAPI) enqueueWebhookPayload(ctx context.Context, actor, requestID string, payload webhooks.Payload) error {
 	if api == nil || api.db == nil {
 		return nil

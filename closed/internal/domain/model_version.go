@@ -8,20 +8,20 @@ import (
 
 // ModelVersion represents a versioned model artifact with immutable provenance.
 type ModelVersion struct {
-	ID                   string
-	ProjectID            string
-	ModelID              string
-	Version              string
-	Status               ModelStatus
-	RunID                string
-	ArtifactIDs          []string
-	DatasetVersionIDs    []string
-	EnvLockID            string
-	CodeRef              CodeRef
-	PolicySnapshotSHA256 string
-	CreatedAt            time.Time
-	CreatedBy            string
-	IntegritySHA256      string
+	ID                   string      `json:"modelVersionId"`
+	ProjectID            string      `json:"projectId"`
+	ModelID              string      `json:"modelId"`
+	Version              string      `json:"version"`
+	Status               ModelStatus `json:"status"`
+	RunID                string      `json:"runId"`
+	ArtifactIDs          []string    `json:"artifactIds"`
+	DatasetVersionIDs    []string    `json:"datasetVersionIds,omitempty"`
+	EnvLockID            string      `json:"envLockId,omitempty"`
+	CodeRef              CodeRef     `json:"codeRef,omitempty"`
+	PolicySnapshotSHA256 string      `json:"policySnapshotSha256,omitempty"`
+	CreatedAt            time.Time   `json:"createdAt"`
+	CreatedBy            string      `json:"createdBy,omitempty"`
+	IntegritySHA256      string      `json:"integritySha256,omitempty"`
 }
 
 func (v ModelVersion) Validate() error {
@@ -64,14 +64,14 @@ type ModelVersionTransition struct {
 
 // ModelExport captures an export request for a model version.
 type ModelExport struct {
-	ExportID        string
-	ProjectID       string
-	ModelVersionID  string
-	Status          string
-	Target          string
-	CreatedAt       time.Time
-	CreatedBy       string
-	IntegritySHA256 string
+	ExportID        string    `json:"exportId"`
+	ProjectID       string    `json:"projectId"`
+	ModelVersionID  string    `json:"modelVersionId"`
+	Status          string    `json:"status"`
+	Target          string    `json:"target,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+	CreatedBy       string    `json:"createdBy,omitempty"`
+	IntegritySHA256 string    `json:"integritySha256,omitempty"`
 }
 
 func (e ModelExport) Validate() error {

@@ -62,6 +62,15 @@ type experimentsAPI struct {
 	devEnvAuditOverride          devEnvAuditAppender
 	environmentStoreOverride     environmentStore
 	devEnvPolicySnapshotOverride devEnvPolicySnapshotBuilder
+
+	modelStoreOverride             modelStore
+	modelVersionStoreOverride      modelVersionStore
+	modelVersionTransitionOverride modelVersionTransitionStore
+	modelExportStoreOverride       modelExportStore
+	modelRunBindingsOverride       runBindingsStore
+	modelRunSpecOverride           runSpecStore
+	modelAuditOverride             modelAuditAppender
+	modelLineageOverride           modelLineageAppender
 }
 
 func newExperimentsAPI(
@@ -135,6 +144,16 @@ func (api *experimentsAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /projects/{project_id}/environment-locks", api.handleCreateEnvironmentLock)
 	mux.HandleFunc("GET /projects/{project_id}/environment-locks", api.handleListEnvironmentLocks)
 	mux.HandleFunc("GET /projects/{project_id}/environment-locks/{lock_id}", api.handleGetEnvironmentLock)
+	mux.HandleFunc("POST /projects/{project_id}/models", api.handleCreateModel)
+	mux.HandleFunc("GET /projects/{project_id}/models", api.handleListModels)
+	mux.HandleFunc("GET /projects/{project_id}/models/{model_id}", api.handleGetModel)
+	mux.HandleFunc("GET /projects/{project_id}/models/{model_id}/versions", api.handleListModelVersions)
+	mux.HandleFunc("POST /projects/{project_id}/models/{model_id}/versions", api.handleCreateModelVersion)
+	mux.HandleFunc("GET /projects/{project_id}/model-versions/{model_version_id}", api.handleGetModelVersion)
+	mux.HandleFunc("GET /projects/{project_id}/model-versions/{model_version_id}/provenance", api.handleGetModelVersionProvenance)
+	mux.HandleFunc("POST /projects/{project_id}/model-versions/{model_version_id}:validate", api.handleValidateModelVersion)
+	mux.HandleFunc("POST /projects/{project_id}/model-versions/{model_version_id}:approve", api.handleApproveModelVersion)
+	mux.HandleFunc("POST /projects/{project_id}/model-versions/{model_version_id}:deprecate", api.handleDeprecateModelVersion)
 	mux.HandleFunc("POST /projects/{project_id}/dev-environments", api.handleCreateDevEnvironment)
 	mux.HandleFunc("GET /projects/{project_id}/dev-environments", api.handleListDevEnvironments)
 	mux.HandleFunc("GET /projects/{project_id}/dev-environments/{dev_env_id}", api.handleGetDevEnvironment)

@@ -19,6 +19,8 @@ func experimentsRequiredRole(r *http.Request) string {
 		return auth.RoleAdmin
 	case strings.Contains(path, "/webhooks"):
 		return auth.RoleAdmin
+	case strings.Contains(path, "/model-versions/") && (strings.HasSuffix(path, ":approve") || strings.HasSuffix(path, ":deprecate") || strings.HasSuffix(path, ":export")):
+		return auth.RoleAdmin
 	}
 	return rbac.RequiredRoleFromRequest(r)
 }
