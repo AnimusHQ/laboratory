@@ -94,6 +94,7 @@ Status: satisfied
 Команды выполнены в контролируемой среде без внешних зависимостей:
 - `make guardrails-check`
 - `make openapi-lint`
+- `make openapi-compat`
 - `./scripts/go_test.sh ./closed/...`
 - `make integrations-test`
 - `make dr-validate` (без `ANIMUS_DR_VALIDATE` — no‑op)

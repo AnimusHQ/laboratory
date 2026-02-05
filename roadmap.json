@@ -100,7 +100,7 @@
     "as_of": "2026-02-01",
     "implementation_root": "closed/",
     "completed": {
-      "milestones": ["M0", "M1"],
+      "milestones": ["M0", "M1", "M7", "M8"],
       "capabilities": [
         "CP/DP boundary guardrails (depguard) and ADRs",
         "Project scoping middleware and enforcement for key services",
@@ -111,15 +111,12 @@
       ]
     },
     "in_progress": {
-      "milestones": ["M2"]
+      "milestones": ["M2", "M5"]
     },
     "gaps_blocking_production_grade": [
       "Real DP runtime executor (Kubernetes) and CP<->DP execution protocol",
       "Scheduling/queues/quotas and cancellation end-to-end",
-      "OIDC/SAML SSO + RBAC matrix enforcement end-to-end",
       "Secrets TTL integration + redaction pipeline",
-      "Model registry + promotion workflow",
-      "Dev environments + audited remote access",
       "Full observability, HA, backups/DR, packaging, air-gapped/SBOM gates",
       "Automated E2E acceptance in CI"
     ],
@@ -263,7 +260,7 @@
     {
       "id": "M5",
       "name": "Security & Governance Hardening",
-      "status": "not_started",
+      "status": "in_progress",
       "depends_on": ["M3"],
       "objective": "SSO, RBAC matrix enforcement, secrets TTL, deny-by-default egress, audit export to SIEM, retention policies.",
       "exit_criteria": [
@@ -294,7 +291,7 @@
     {
       "id": "M7",
       "name": "Developer Environments (Notebooks/IDE/Terminals)",
-      "status": "not_started",
+      "status": "done",
       "depends_on": ["M5", "M3"],
       "objective": "Managed dev environments with audited remote access, TTL, templates, and dev->commit->run path.",
       "exit_criteria": [
@@ -308,7 +305,7 @@
     {
       "id": "M8",
       "name": "Model Registry & Promotion Workflow",
-      "status": "not_started",
+      "status": "done",
       "depends_on": ["M5", "M3"],
       "objective": "Model lifecycle with validation/approval, export hooks, policy control, lineage integration.",
       "exit_criteria": [
@@ -371,7 +368,7 @@
           "id": "T0003",
           "title": "Security scanning baseline: SAST + dependency scan",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0002"],
           "acceptance": ["Scans run in CI", "Critical findings gate releases (policy-controlled)"]
         },
@@ -379,7 +376,7 @@
           "id": "T0004",
           "title": "Spec/contract linting in CI (OpenAPI/protos + backward-compat checks)",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0002"],
           "acceptance": ["Schema lint on PR", "Breaking changes require major bump", "Changelog generated"]
         }
@@ -709,13 +706,13 @@
       "name": "Authentication & Authorization (SSO + RBAC)",
       "owner": "Security/Identity",
       "milestones": ["M5", "M9"],
-      "status": "not_started",
+      "status": "in_progress",
       "tasks": [
         {
           "id": "T0601",
           "title": "OIDC authentication with session TTL and forced logout",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0301"],
           "acceptance": ["OIDC login works", "Session TTL enforced", "Forced logout supported", "Auth events audited"]
         },
@@ -731,7 +728,7 @@
           "id": "T0603",
           "title": "RBAC roles + project role bindings (IdP groups -> roles)",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0302", "T0601"],
           "acceptance": ["RBAC matrix enforced on endpoints", "Role changes audited", "Deny-by-default"]
         },
@@ -931,13 +928,13 @@
       "name": "Managed Developer Environments",
       "owner": "Data Plane / DX",
       "milestones": ["M7", "M9"],
-      "status": "not_started",
+      "status": "done",
       "tasks": [
         {
           "id": "T1201",
           "title": "Dev environment controller (create/stop/ttl/quota) in DP",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0603", "T0410"],
           "acceptance": ["Dev env created per project", "TTL enforced", "Quota enforced", "Network policies applied"]
         },
@@ -945,7 +942,7 @@
           "id": "T1202",
           "title": "Remote access endpoints (terminal + IDE proxy) with auth and audit",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T1201", "T1101"],
           "acceptance": ["Access requires auth", "Sessions audited", "No secret exposure"]
         },
@@ -953,7 +950,7 @@
           "id": "T1203",
           "title": "Environment templates (CPU/GPU) versioned + policy-controlled selection",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0205", "T1201", "T0206"],
           "acceptance": ["Templates versioned", "Policies restrict templates per project", "Template snapshot stored"]
         }
@@ -965,13 +962,13 @@
       "name": "Model Registry & Promotion",
       "owner": "Control Plane / ML Platform",
       "milestones": ["M8", "M9"],
-      "status": "not_started",
+      "status": "done",
       "tasks": [
         {
           "id": "T1301",
           "title": "Model/ModelVersion entities + status transitions",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T0302", "T1101"],
           "acceptance": ["Statuses enforced", "Transitions audited", "Project scoping enforced"]
         },
@@ -979,7 +976,7 @@
           "id": "T1302",
           "title": "Validation/approval workflow with role enforcement",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T1301", "T0603"],
           "acceptance": ["Only authorized roles can approve", "Approval emits events", "Policy snapshot stored"]
         },
@@ -987,7 +984,7 @@
           "id": "T1303",
           "title": "Model export interface + policy controls + export audit/events",
           "type": "implementation",
-          "status": "not_started",
+          "status": "done",
           "deps": ["T1302", "T0702"],
           "acceptance": ["Export allowed/denied per policy", "Exports audited", "Event emitted and export retriable"]
         }
