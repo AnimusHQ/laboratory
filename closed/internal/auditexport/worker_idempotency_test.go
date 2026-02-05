@@ -130,44 +130,44 @@ func (s *memoryDeliveryStore) CountByStatus(ctx context.Context, status Delivery
 	return count, nil
 }
 
-type stubSinkStore struct {
+type idempotencySinkStore struct {
 	sink Sink
 }
 
-func (s stubSinkStore) UpsertSink(ctx context.Context, sink Sink) (Sink, error) {
+func (s idempotencySinkStore) UpsertSink(ctx context.Context, sink Sink) (Sink, error) {
 	return s.sink, nil
 }
 
-func (s stubSinkStore) GetSink(ctx context.Context, sinkID string) (Sink, error) {
+func (s idempotencySinkStore) GetSink(ctx context.Context, sinkID string) (Sink, error) {
 	return s.sink, nil
 }
 
-func (s stubSinkStore) ListSinks(ctx context.Context, limit int) ([]Sink, error) {
+func (s idempotencySinkStore) ListSinks(ctx context.Context, limit int) ([]Sink, error) {
 	return []Sink{s.sink}, nil
 }
 
-type stubEventStore struct {
+type idempotencyEventStore struct {
 	event domain.AuditEvent
 	err   error
 }
 
-func (s stubEventStore) GetEvent(ctx context.Context, eventID int64) (domain.AuditEvent, error) {
+func (s idempotencyEventStore) GetEvent(ctx context.Context, eventID int64) (domain.AuditEvent, error) {
 	if s.err != nil {
 		return domain.AuditEvent{}, s.err
 	}
 	return s.event, nil
 }
 
-type stubAttemptStore struct {
+type idempotencyAttemptStore struct {
 	attempts []DeliveryAttempt
 }
 
-func (s *stubAttemptStore) Insert(ctx context.Context, attempt DeliveryAttempt) (DeliveryAttempt, error) {
+func (s *idempotencyAttemptStore) Insert(ctx context.Context, attempt DeliveryAttempt) (DeliveryAttempt, error) {
 	s.attempts = append(s.attempts, attempt)
 	return attempt, nil
 }
 
-func (s *stubAttemptStore) List(ctx context.Context, deliveryID int64, limit int) ([]DeliveryAttempt, error) {
+func (s *idempotencyAttemptStore) List(ctx context.Context, deliveryID int64, limit int) ([]DeliveryAttempt, error) {
 	return s.attempts, nil
 }
 
@@ -193,12 +193,12 @@ func TestWorkerMovesToDLQOnceAfterRetries(t *testing.T) {
 		UpdatedAt:     now,
 	}
 	store := newMemoryDeliveryStore(delivery)
-	attempts := &stubAttemptStore{}
+	attempts := &idempotencyAttemptStore{}
 	sinkCfg, err := json.Marshal(SinkConfig{SyslogAddr: "syslog:1234", SyslogProtocol: "tcp"})
 	if err != nil {
 		t.Fatalf("marshal sink config: %v", err)
 	}
-	sinkStore := stubSinkStore{sink: Sink{
+	sinkStore := idempotencySinkStore{sink: Sink{
 		SinkID:      "sink-1",
 		Name:        "default",
 		Destination: "syslog",
@@ -206,10 +206,10 @@ func TestWorkerMovesToDLQOnceAfterRetries(t *testing.T) {
 		Config:      sinkCfg,
 		Enabled:     true,
 	}}
-	eventStore := stubEventStore{event: domain.AuditEvent{EventID: 42}}
+	eventStore := idempotencyEventStore{event: domain.AuditEvent{EventID: 42}}
 
 	worker := NewWorker(store, attempts, sinkStore, eventStore, nil, nil, Config{
-		EnabledFlag:    true,
+		Destination:    "syslog",
 		MaxAttempts:    2,
 		RetryBaseDelay: time.Second,
 		RetryMaxDelay:  time.Second,
