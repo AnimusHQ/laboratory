@@ -7,14 +7,17 @@
 ## 2. Обязательные гейты
 1. `make guardrails-check`
 2. `make openapi-lint`
-3. `./scripts/go_test.sh ./closed/...`
-4. `make integrations-test`
-5. `make dr-validate` (ожидаемый no‑op без `ANIMUS_DR_VALIDATE=1`)
+3. `make openapi-compat`
+4. `./scripts/go_test.sh ./closed/...`
+5. `make integrations-test`
+6. `make dr-validate` (ожидаемый no‑op без `ANIMUS_DR_VALIDATE=1`)
 
 ## 3. Supply‑chain гейты
 1. `make sbom`
 2. `make vuln-scan`
 3. `make supply-chain`
+4. `make sast-scan` (только при `ANIMUS_SAST_SCAN=1`)
+5. `make dep-scan` (только при `ANIMUS_DEP_SCAN=1`)
 
 ## 4. Минимальные smoke‑проверки
 1. `/healthz` и `/readyz` для gateway, experiments, dataset‑registry, audit.
