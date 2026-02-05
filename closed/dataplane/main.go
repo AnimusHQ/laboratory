@@ -66,6 +66,11 @@ func main() {
 		logger.Error("invalid status poll interval", "error", err)
 		os.Exit(2)
 	}
+	egressMode, err := normalizeEgressMode(env.String("ANIMUS_DP_EGRESS_MODE", "deny"))
+	if err != nil {
+		logger.Error("invalid dp egress mode", "error", err)
+		os.Exit(2)
+	}
 
 	secretsCfg, err := secrets.ConfigFromEnv()
 	if err != nil {
@@ -90,6 +95,7 @@ func main() {
 		JobServiceAccount: jobServiceAccount,
 		HeartbeatInterval: heartbeatInterval,
 		PollInterval:      pollInterval,
+		EgressMode:        egressMode,
 	}, secretsManager)
 
 	mux := http.NewServeMux()

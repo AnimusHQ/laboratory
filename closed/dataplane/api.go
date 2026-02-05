@@ -23,13 +23,14 @@ type dataplaneConfig struct {
 	JobServiceAccount string
 	HeartbeatInterval time.Duration
 	PollInterval      time.Duration
+	EgressMode        string
 }
 
 type dataplaneAPI struct {
-	logger *slog.Logger
-	cp     *controlPlaneClient
-	k8s    *k8s.Client
-	cfg    dataplaneConfig
+	logger  *slog.Logger
+	cp      *controlPlaneClient
+	k8s     *k8s.Client
+	cfg     dataplaneConfig
 	secrets secrets.Manager
 
 	mu       sync.Mutex
@@ -123,6 +124,10 @@ func (api *dataplaneAPI) handleExecuteRun(w http.ResponseWriter, r *http.Request
 	}
 	if strings.TrimSpace(runSpec.ProjectID) != strings.TrimSpace(req.ProjectID) {
 		writeError(w, http.StatusConflict, "project_mismatch", r.Header.Get("X-Request-Id"))
+		return
+	}
+	if err := validateEgressPolicy(api.cfg.EgressMode, runSpec.EnvLock); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "network_policy_required", r.Header.Get("X-Request-Id"))
 		return
 	}
 
@@ -267,6 +272,18 @@ func (api *dataplaneAPI) removeTracker(runID string) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 	delete(api.trackers, runID)
+}
+
+func secretAccessEventID(runID, projectID, dispatchID, classRef, leaseID string) string {
+	parts := []string{
+		strings.TrimSpace(runID),
+		strings.TrimSpace(projectID),
+		strings.TrimSpace(dispatchID),
+		strings.TrimSpace(classRef),
+		strings.TrimSpace(leaseID),
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "|")))
+	return "secret-access-" + hex.EncodeToString(sum[:])
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

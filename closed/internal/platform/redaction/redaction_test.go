@@ -64,3 +64,16 @@ func TestRedactMapString(t *testing.T) {
 		t.Fatalf("expected value pattern redacted")
 	}
 }
+
+func TestRedactStringPanicAndDebug(t *testing.T) {
+	panicInput := "panic: token=abcd1234"
+	panicOut := RedactString(panicInput)
+	if strings.Contains(panicOut, "abcd1234") {
+		t.Fatalf("expected panic token redacted, got %q", panicOut)
+	}
+	debugInput := "debug api_key=xyz789"
+	debugOut := RedactString(debugInput)
+	if strings.Contains(debugOut, "xyz789") {
+		t.Fatalf("expected debug api_key redacted, got %q", debugOut)
+	}
+}

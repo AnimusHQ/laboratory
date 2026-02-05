@@ -11,7 +11,9 @@ var (
 	valuePatterns = []*regexp.Regexp{
 		regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
 		regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9\-_.=]+`),
+		regexp.MustCompile(`(?i)api[_-]?key\s*[:=]\s*[^\s]+`),
 		regexp.MustCompile(`(?i)secret[_-]?key\s*[:=]\s*[^\s]+`),
+		regexp.MustCompile(`(?i)token\s*[:=]\s*[^\s]+`),
 		regexp.MustCompile(`(?i)password\s*[:=]\s*[^\s]+`),
 	}
 )
