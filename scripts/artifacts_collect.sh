@@ -48,7 +48,7 @@ PY
 fi
 
 if [[ -n "$GATEWAY_URL" ]] && [[ -f "${ARTIFACTS_DIR}/e2e_ids.json" ]] && command -v python3 >/dev/null 2>&1; then
-  read -r PROJECT_ID RUN_ID <<<"$(python3 - <<'PY' "${ARTIFACTS_DIR}/e2e_ids.json"
+  read -r PROJECT_ID RUN_ID <<<"$(python3 - <<'PY' "${ARTIFACTS_DIR}/e2e_ids.json" || true
 import json
 import sys
 with open(sys.argv[1], "r", encoding="utf-8") as fh:
