@@ -18,7 +18,7 @@ export GOCACHE := $(CACHE_DIR)/go-build
 export GOMODCACHE := $(CACHE_DIR)/go-mod
 export GOTMPDIR := $(CACHE_DIR)/go-tmp
 
-.PHONY: bootstrap fmt test integrations-test dr-validate lint build openapi-lint openapi-compat guardrails-check dev demo demo-smoke demo-down e2e e2e-full system-test sbom vuln-scan supply-chain helm-images sast-scan dep-scan integration-up integration-down system-up system-down ui-build ui-test
+.PHONY: bootstrap fmt test integrations-test dr-validate lint build openapi-lint openapi-compat guardrails-check dev demo demo-smoke demo-down e2e e2e-full system-test sbom vuln-scan supply-chain helm-images sast-scan dep-scan integration-up integration-down system-up system-down ui-build ui-test full-stack artifacts-collect
 
 bootstrap:
 	@mkdir -p "$(GOCACHE)" "$(GOMODCACHE)" "$(GOTMPDIR)"
@@ -66,10 +66,18 @@ lint:
 test:
 	@mkdir -p "$(GOCACHE)" "$(GOMODCACHE)" "$(GOTMPDIR)"
 	@echo "==> go test"
-	@./scripts/go_test.sh $(GO_PACKAGES)
+	@unit_json=""; \
+	if [ -n "$$ANIMUS_GO_TEST_JSON_DIR" ]; then \
+		unit_json="$${ANIMUS_GO_TEST_JSON_DIR}/go-test-unit.json"; \
+	fi; \
+	ANIMUS_GO_TEST_JSON="$$unit_json" ./scripts/go_test.sh $(GO_PACKAGES)
 	@if [ "$$ANIMUS_INTEGRATION" = "1" ]; then \
 		echo "==> integration tests"; \
-		ANIMUS_INTEGRATION=1 ./scripts/go_test.sh -tags=integration ./closed/...; \
+		integration_json=""; \
+		if [ -n "$$ANIMUS_GO_TEST_JSON_DIR" ]; then \
+			integration_json="$${ANIMUS_GO_TEST_JSON_DIR}/go-test-integration.json"; \
+		fi; \
+		ANIMUS_INTEGRATION=1 ANIMUS_GO_TEST_JSON="$$integration_json" ./scripts/go_test.sh -tags=integration ./closed/...; \
 	else \
 		echo "==> integration tests skipped (set ANIMUS_INTEGRATION=1)"; \
 	fi
@@ -87,7 +95,11 @@ test:
 	@PYTHONPATH="$(PY_SDK_DIR)/src" $(PY) -m unittest discover -s "$(PY_SDK_DIR)/tests" -p 'test_*.py'
 
 integrations-test:
-	@./scripts/go_test.sh ./closed/...
+	@json_out=""; \
+	if [ -n "$$ANIMUS_GO_TEST_JSON_DIR" ]; then \
+		json_out="$${ANIMUS_GO_TEST_JSON_DIR}/go-test-integrations.json"; \
+	fi; \
+	ANIMUS_GO_TEST_JSON="$$json_out" ./scripts/go_test.sh ./closed/...
 
 integration-up:
 	@./scripts/integration_up.sh
@@ -106,6 +118,12 @@ system-up:
 
 system-down:
 	@./scripts/kind_down.sh
+
+full-stack:
+	@./scripts/full_stack.sh
+
+artifacts-collect:
+	@./scripts/artifacts_collect.sh
 
 
 dr-validate:
