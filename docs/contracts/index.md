@@ -102,6 +102,11 @@
 - Эндпоинты графа: `GET /api/lineage/runs/{run_id}` (подграф Run), `GET /api/lineage/model-versions/{model_version_id}` (подграф происхождения модели).
 - Параметры подграфа: `depth`, `max_edges`; ответ содержит `root`, `nodes`, `edges`.
 
+### 1.13 Полный контур тестирования (full‑stack)
+- Единая точка входа: `make full-stack` (unit + integration + OpenAPI lint + системный k8s + e2e + устойчивость + опциональный DR).
+- Артефакты сохраняются в `artifacts/<timestamp>/` и используются как доказательная база качества.
+- Базовые цели: `make test`, `make integrations-test`, `make system-up`, `make system-test`, `make e2e-full`, `make artifacts-collect`.
+
 ## 2. Контракт CP↔DP (Data Plane протокол)
 ### 2.1 Текущий статус
 - Транспорт: **HTTP + OpenAPI**, контракт зафиксирован в `open/api/openapi/dataplane_internal.yaml` (ADR‑0007).
