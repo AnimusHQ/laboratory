@@ -241,6 +241,7 @@ func main() {
 				"roles":   identity.Roles,
 			})
 		})))
+		mux.Handle("/api/auth/me", sessionProtected(authMeHandler()))
 
 		if err := authCfg.ValidateForLogin(); err == nil {
 			login, err := oidcService.LoginHandler()
@@ -282,6 +283,7 @@ func main() {
 				"roles":   identity.Roles,
 			})
 		})))
+		mux.Handle("/api/auth/me", sessionProtected(authMeHandler()))
 	} else if authCfg.Mode == auth.ModeDisabled {
 		mux.HandleFunc("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -293,6 +295,7 @@ func main() {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("{\"mode\":\"disabled\"}\n"))
 		})
+		mux.Handle("/api/auth/me", sessionProtected(authMeHandler()))
 	} else {
 		mux.HandleFunc("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -309,6 +312,7 @@ func main() {
 				"roles":   identity.Roles,
 			})
 		})))
+		mux.Handle("/api/auth/me", sessionProtected(authMeHandler()))
 	}
 
 	datasetRegistryProxy, err := newReverseProxy(logger, internalAuthSecret, env.String("DATASET_REGISTRY_BASE_URL", "http://localhost:8081"))

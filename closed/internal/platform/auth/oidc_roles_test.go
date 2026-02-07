@@ -26,3 +26,19 @@ func TestResolveRolesFromClaimsIncludesGroupsAndMappedRoles(t *testing.T) {
 		t.Fatalf("expected mapped admin role, got %v", roles)
 	}
 }
+
+func TestResolveRolesFromClaimsFallsBackToRealmAccess(t *testing.T) {
+	cfg := Config{
+		RolesClaim:  "roles",
+		GroupsClaim: "groups",
+	}
+	claims := map[string]any{
+		"realm_access": map[string]any{
+			"roles": []string{"admin", "viewer"},
+		},
+	}
+	roles := resolveRolesFromClaims(cfg, claims)
+	if !contains(roles, "admin") || !contains(roles, "viewer") {
+		t.Fatalf("expected realm_access roles, got %v", roles)
+	}
+}

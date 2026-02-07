@@ -428,6 +428,9 @@ func identityFromClaims(cfg Config, claims map[string]any) Identity {
 
 func resolveRolesFromClaims(cfg Config, claims map[string]any) []string {
 	roles := extractRolesClaim(claims, cfg.RolesClaim)
+	if len(roles) == 0 {
+		roles = extractRealmAccessRoles(claims)
+	}
 	groups := extractRolesClaim(claims, cfg.GroupsClaim)
 	mapped := mapGroupsToRoles(groups, cfg.GroupRoleMap)
 	return mergeUnique(roles, groups, mapped)
@@ -499,7 +502,23 @@ func extractRolesClaim(claims map[string]any, key string) []string {
 	if !ok {
 		return nil
 	}
-	switch typed := v.(type) {
+	return extractRolesValue(v)
+}
+
+func extractRealmAccessRoles(claims map[string]any) []string {
+	raw, ok := claims["realm_access"]
+	if !ok {
+		return nil
+	}
+	realmAccess, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return extractRolesValue(realmAccess["roles"])
+}
+
+func extractRolesValue(value any) []string {
+	switch typed := value.(type) {
 	case []any:
 		out := make([]string, 0, len(typed))
 		for _, item := range typed {
