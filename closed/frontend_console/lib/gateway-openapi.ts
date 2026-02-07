@@ -5,6 +5,7 @@ export type components = {
   schemas: {
     AuditEvent: { action: string; actor: string; event_id: number; integrity_sha256: string; ip?: string; occurred_at: string; payload: Record<string, unknown>; request_id?: string; resource_id: string; resource_type: string; user_agent?: string; };
     AuditEventListResponse: { events: (components["schemas"]["AuditEvent"])[]; next_before_event_id?: number; };
+    AuthMeResponse: { email?: string; roles: (string)[]; user_id: string; };
     CIReportRequest: { commit_sha: string; image_digest: string; pipeline_id: string; provider?: string; repo: string; };
     CIReportResponse: { commit_sha?: string; image_digest: string; payload_sha256: string; pipeline_id?: string; provider?: string; received_at?: string; received_by?: string; repo?: string; status: "created" | "duplicate"; };
     CIWebhookRequest: { provider?: string; run_id: string; };
@@ -20,6 +21,7 @@ export type components = {
     CreateExperimentRunRequest: { artifacts_prefix?: string; dataset_version_id?: string; ended_at?: string; git_commit?: string; git_ref?: string; git_repo?: string; metrics?: Record<string, unknown>; params?: Record<string, unknown>; started_at?: string; status: "pending" | "running" | "succeeded" | "failed" | "canceled"; };
     CreatePolicyRequest: { description?: string; name: string; spec: string; status?: "active" | "disabled"; };
     CreatePolicyVersionRequest: { spec: string; status?: "active" | "disabled"; };
+    CreateProjectRequest: { description?: string; metadata?: { }; name: string; };
     CreateRuleRequest: { description?: string; name: string; spec: components["schemas"]["RuleSpec"]; };
     Dataset: { created_at: string; created_by: string; dataset_id: string; description?: string; metadata: { }; name: string; };
     DatasetListResponse: { datasets: (components["schemas"]["Dataset"])[]; };
@@ -134,6 +136,8 @@ export type components = {
     PolicyVersion: { created_at: string; created_by: string; policy_id: string; policy_version_id: string; spec: { }; spec_sha256: string; spec_yaml: string; status: "active" | "disabled"; version: number; };
     PolicyVersionListResponse: { policy_id: string; versions: (components["schemas"]["PolicyVersion"])[]; };
     PolicyVersionSummary: { created_at: string; created_by: string; policy_version_id: string; spec_sha256: string; status: "active" | "disabled"; version: number; };
+    Project: { created_at: string; created_by: string; description?: string; metadata: { }; name: string; project_id: string; };
+    ProjectListResponse: { projects: (components["schemas"]["Project"])[]; };
     ProjectRunCreateRequest: { codeRef: components["schemas"]["CodeRef"]; datasetBindings: { [key: string]: string; }; envLock: components["schemas"]["EnvironmentLockRef"]; idempotencyKey?: string; parameters: { }; pipelineSpec: { }; };
     ProjectRunCreateResponse: { created: boolean; runId: string; specHash: string; status: string; };
     ProjectRunDispatchRequest: { idempotencyKey?: string; };
@@ -447,6 +451,14 @@ export type operations = {
       401: components["schemas"]["ErrorResponse"];
       403: components["schemas"]["ErrorResponse"];
       502: components["schemas"]["ErrorResponse"];
+    };
+  };
+  "get__api_auth_me": {
+    parameters?: never;
+    requestBody?: never;
+    responses: {
+      200: components["schemas"]["AuthMeResponse"];
+      401: components["schemas"]["ErrorResponse"];
     };
   };
   "get__api_dataset_registry_proxyPath": {
@@ -790,6 +802,9 @@ export type paths = {
     put?: operations["put__api_audit_proxyPath"];
     patch?: operations["patch__api_audit_proxyPath"];
     delete?: operations["delete__api_audit_proxyPath"];
+  };
+  "/api/auth/me": {
+    get?: operations["get__api_auth_me"];
   };
   "/api/dataset-registry/{proxyPath}": {
     get?: operations["get__api_dataset_registry_proxyPath"];

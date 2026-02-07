@@ -18,15 +18,15 @@ export async function getGatewaySession(): Promise<GatewaySession> {
   const cookieHeader = cookieStore.toString();
 
   try {
-    const session = await gatewayFetchJSON<components['schemas']['SessionResponse']>('/auth/session', {
+    const session = await gatewayFetchJSON<components['schemas']['AuthMeResponse']>('/api/auth/me', {
       method: 'GET',
       headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
       retry: false,
     });
     return {
       mode: 'authenticated',
-      subject: session.subject,
-      email: session.email,
+      subject: session.user_id,
+      email: session.email ?? undefined,
       roles: session.roles ?? [],
     };
   } catch (err) {

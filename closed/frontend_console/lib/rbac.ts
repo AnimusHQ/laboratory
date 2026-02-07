@@ -4,6 +4,8 @@ const roleRank: Record<string, number> = {
   viewer: 1,
   editor: 2,
   admin: 3,
+  platform_admin: 3,
+  'platform-admin': 3,
 };
 
 export function deriveEffectiveRole(roles: string[] | undefined): EffectiveRole {
@@ -34,6 +36,10 @@ export function roleLabel(role: EffectiveRole): string {
     default:
       return 'Не определена';
   }
+}
+
+export function isAdminRole(roles: string[] | undefined): boolean {
+  return deriveEffectiveRole(roles) === 'admin';
 }
 
 export type Capability =
