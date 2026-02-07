@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -11,6 +11,7 @@ import { PolicyHint } from '@/components/console/policy-hint';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { getGatewayLoginUrl } from '@/lib/auth/login-url';
 import { OperationsProvider } from '@/lib/operations';
 import { cn } from '@/lib/utils';
 import { ProjectProvider, useProjectContext } from '@/lib/project-context';
@@ -183,6 +184,15 @@ function TopBar({ session }: { session: GatewaySession }) {
 
 export function AppShell({ session, children }: { session: GatewaySession; children: ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = useMemo(() => {
+    if (!pathname) {
+      return '/console';
+    }
+    const query = searchParams?.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
+  const loginUrl = useMemo(() => getGatewayLoginUrl(returnTo), [returnTo]);
 
   return (
     <ProjectProvider>
@@ -230,7 +240,7 @@ export function AppShell({ session, children }: { session: GatewaySession; child
                     Для доступа требуется аутентификация через Gateway. Перейдите к началу входа и повторите запрос.
                   </div>
                   <div className="mt-3">
-                    <Link href="/auth/login" className="text-sm font-semibold text-primary">
+                    <Link href={loginUrl} className="text-sm font-semibold text-primary">
                       Перейти к входу через Gateway
                     </Link>
                   </div>

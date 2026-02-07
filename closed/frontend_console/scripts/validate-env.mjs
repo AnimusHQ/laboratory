@@ -12,8 +12,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const requiredByMode = {
-  build: ['NEXT_PUBLIC_SITE_URL'],
-  runtime: ['NEXT_PUBLIC_SITE_URL'],
+  build: ['NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_GATEWAY_URL'],
+  runtime: ['NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_GATEWAY_URL'],
 };
 
 const errors = [];
