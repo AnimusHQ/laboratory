@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { describeError } from '@/lib/error-messages';
+import { buildProjectSelectionURL, shouldRedirectToProjectSelection } from '@/lib/project-routing';
 import { sanitizePayload } from '@/lib/sanitize';
 
 export type ErrorStateProps = {
@@ -16,6 +18,8 @@ export type ErrorStateProps = {
 };
 
 export function ErrorState({ code, message, requestId, status, details, retryable }: ErrorStateProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const descriptor = useMemo(() => describeError(code), [code]);
   const effectiveMessage = useMemo(() => {
     if (message) {
@@ -50,6 +54,12 @@ export function ErrorState({ code, message, requestId, status, details, retryabl
       ),
     [code, effectiveMessage, requestId, status, sanitizedDetails, retryable],
   );
+
+  useEffect(() => {
+    if (shouldRedirectToProjectSelection(code, pathname)) {
+      router.push(buildProjectSelectionURL('project_id_required'));
+    }
+  }, [code, pathname, router]);
 
   const copyDiagnostics = async () => {
     try {

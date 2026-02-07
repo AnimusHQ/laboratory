@@ -32,6 +32,23 @@ export const gatewayBaseURL = (): string => {
   return '';
 };
 
+const PROJECT_COOKIE_KEY = 'animus_project_id';
+
+const readProjectIdFromBrowser = (): string => {
+  if (typeof document === 'undefined') {
+    return '';
+  }
+  const cookieValue = document.cookie
+    .split(';')
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${PROJECT_COOKIE_KEY}=`));
+  if (!cookieValue) {
+    return '';
+  }
+  const value = decodeURIComponent(cookieValue.split('=')[1] ?? '').trim();
+  return value;
+};
+
 const isSafeMethod = (method?: string) => {
   if (!method) {
     return true;
@@ -52,6 +69,12 @@ export async function gatewayFetch(path: string, init: GatewayFetchOptions = {})
     (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `req-${Date.now()}`);
   if (requestId) {
     headers.set('X-Request-Id', requestId);
+  }
+  if (!headers.has('X-Project-Id') && !headers.has('X-Project-ID')) {
+    const projectId = readProjectIdFromBrowser();
+    if (projectId) {
+      headers.set('X-Project-Id', projectId);
+    }
   }
 
   const attempt = async (): Promise<Response> =>

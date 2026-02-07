@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { can } from '../lib/rbac';
+import { can, isAdminRole } from '../lib/rbac';
 
 test('rbac gating respects role capability mapping', () => {
   assert.equal(can('viewer', 'run:read'), true);
@@ -17,4 +17,11 @@ test('rbac gating respects role capability mapping', () => {
   assert.equal(can('editor', 'audit:read'), false);
   assert.equal(can('admin', 'ops:read'), true);
   assert.equal(can('unknown', 'run:read'), false);
+});
+
+test('isAdminRole detects platform admin aliases', () => {
+  assert.equal(isAdminRole(['admin']), true);
+  assert.equal(isAdminRole(['platform_admin']), true);
+  assert.equal(isAdminRole(['platform-admin']), true);
+  assert.equal(isAdminRole(['viewer']), false);
 });

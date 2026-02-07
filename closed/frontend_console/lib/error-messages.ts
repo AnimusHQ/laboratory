@@ -26,6 +26,11 @@ export function describeError(code: string | undefined): ErrorDescriptor {
         title: 'Недоступен upstream сервис',
         hint: 'Повторите запрос позже или сверьте статус доступности в разделе Ops.',
       };
+    case 'project_id_required':
+      return {
+        title: 'Не выбран активный проект',
+        hint: 'Выберите или создайте проект. Контекст нужен для выполнения операции.',
+      };
     default:
       return {
         title: 'Сбой выполнения операции',
