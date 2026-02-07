@@ -107,6 +107,16 @@
 - Артефакты сохраняются в `artifacts/<timestamp>/` и используются как доказательная база качества.
 - Базовые цели: `make test`, `make integrations-test`, `make system-up`, `make system-test`, `make e2e-full`, `make artifacts-collect`.
 
+### 1.14 Эксплуатационные документы
+- Развёртывание и архитектура: `docs/ops/deploy-overview.md`.
+- Установка Helm: `docs/ops/helm-install.md`.
+- Конфигурация: `docs/ops/configuration-reference.md`.
+- Обновления и откаты: `docs/ops/upgrade-rollback.md`.
+- Air‑gapped установка: `docs/ops/airgapped-install.md`.
+- Наблюдаемость: `docs/ops/observability.md`.
+- Резервное копирование и DR: `docs/ops/backup-restore.md`, `docs/ops/dr-game-day.md`.
+- Безопасность: `docs/ops/security-hardening.md`.
+
 ## 2. Контракт CP↔DP (Data Plane протокол)
 ### 2.1 Текущий статус
 - Транспорт: **HTTP + OpenAPI**, контракт зафиксирован в `open/api/openapi/dataplane_internal.yaml` (ADR‑0007).
