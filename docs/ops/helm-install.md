@@ -1,30 +1,30 @@
-# Helm‑установка Control Plane и Data Plane
+# Helm‑установка Animus Datalab (Control Plane + Data Plane)
 
-Документ описывает базовую установку компонентов Animus в Kubernetes через Helm.
+Документ описывает базовую установку компонентов Animus через Helm‑чарты.
 
-## 1. Предусловия
+## 1. Предпосылки
+
 - Kubernetes 1.25+.
-- Helm 3.7+ (поддержка values.schema.json).
-- Доступные образы в реестре (tag или digest).
-- Подготовленные секреты для `ANIMUS_INTERNAL_AUTH_SECRET` и CI webhook.
+- Helm 3.7+ с поддержкой `values.schema.json`.
+- Доступ к реестру образов (online) или предварительно загруженные образы (air‑gapped).
+- Подготовленный общий секрет `auth.internalAuthSecret` для CP и DP.
+- Выбранный namespace (рекомендуется `animus-system`).
 
 ## 2. Подготовка значений
-Создайте два файла значений:
-- `values-control-plane.yaml` для `animus-datapilot`.
-- `values-data-plane.yaml` для `animus-dataplane`.
 
-Минимальный пример (control plane):
+Создайте отдельные файлы значений:
+- `values-datapilot.yaml` для `animus-datapilot`.
+- `values-dataplane.yaml` для `animus-dataplane`.
+
+**Пример для Control Plane (datapilot, внешние Postgres и S3/MinIO):**
 ```yaml
 image:
   repository: ghcr.io/animus-labs
   tag: "0.1.0"
 
 auth:
-  mode: dev
+  mode: oidc
   internalAuthSecret: "<shared-secret>"
-
-ci:
-  webhookSecret: "<ci-secret>"
 
 database:
   url: "postgres://animus:animus@postgres.example:5432/animus?sslmode=disable"
@@ -42,9 +42,15 @@ minio:
   buckets:
     datasets: datasets
     artifacts: artifacts
+
+oidc:
+  issuerURL: "https://idp.example.local/realms/animus"
+  clientID: "animus"
+  clientSecret: "<client-secret>"
+  redirectURL: "https://gateway.example.local/auth/callback"
 ```
 
-Минимальный пример (data plane):
+**Пример для Data Plane (dataplane):**
 ```yaml
 image:
   repository: ghcr.io/animus-labs
@@ -54,23 +60,59 @@ auth:
   internalAuthSecret: "<shared-secret>"
 
 controlPlane:
-  baseURL: "http://animus-cp-gateway:8080"
+  baseURL: "http://animus-datapilot-gateway:8080"
+
+secrets:
+  provider: vault
+  vault:
+    addr: "https://vault.example.local"
+    role: "animus-dataplane"
+    authPath: "auth/kubernetes/login"
+    jwtPath: "/var/run/secrets/kubernetes.io/serviceaccount/token"
 ```
 
 ## 3. Установка
+
 ```bash
-helm upgrade --install animus-cp ./closed/deploy/helm/animus-datapilot -f values-control-plane.yaml
-helm upgrade --install animus-dp ./closed/deploy/helm/animus-dataplane -f values-data-plane.yaml
+kubectl create namespace animus-system
+
+helm upgrade --install animus-datapilot ./closed/deploy/helm/animus-datapilot \
+  --namespace animus-system \
+  --values values-datapilot.yaml
+
+helm upgrade --install animus-dataplane ./closed/deploy/helm/animus-dataplane \
+  --namespace animus-system \
+  --values values-dataplane.yaml
 ```
 
-## 4. Валидация
-- `helm test animus-cp`
-- `helm test animus-dp`
-- `kubectl get pods` и проверка `/readyz`.
+## 4. Ожидаемый результат
 
-## 5. Внешние Postgres и S3
-- Для внешней БД: задайте `database.url`, установите `postgres.enabled=false`.
-- Для внешнего S3/MinIO: задайте `minio.enabled=false`, заполните `minio.endpoint`, `minio.region`, `minio.accessKey`, `minio.secretKey`.
+- Под‑ы в `animus-system` находятся в состоянии `Running`.
+- `/readyz` на Gateway возвращает `200`.
 
-## 6. Дигест‑пиннинг
-Для air‑gapped установок рекомендуется фиксировать `image.digest` или `image.digests` в `values-control-plane.yaml`.
+```bash
+kubectl -n animus-system get pods
+kubectl -n animus-system port-forward svc/animus-datapilot-gateway 8080:8080
+curl -fsS http://127.0.0.1:8080/readyz
+```
+
+## 5. Откат
+
+```bash
+helm -n animus-system rollback animus-datapilot
+helm -n animus-system rollback animus-dataplane
+```
+
+## 6. Диагностика при сбоях
+
+```bash
+kubectl -n animus-system describe pods
+kubectl -n animus-system logs deploy/animus-datapilot-experiments --tail=200
+kubectl -n animus-system logs deploy/animus-dataplane --tail=200
+```
+
+## 7. Ссылки
+
+- `docs/ops/configuration-reference.md` — справочник параметров Helm.
+- `docs/ops/airgapped-install.md` — air‑gapped установка.
+- `docs/ops/upgrade-rollback.md` — процедура обновления и отката.
