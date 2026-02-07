@@ -97,7 +97,7 @@ export function ProjectCreateDialog({ open, onClose }: CreateDialogProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
-      <div className="w-full max-w-2xl rounded-xl border border-border/70 bg-card shadow-glow-sm">
+      <div className="console-surface w-full max-w-2xl rounded-xl shadow-glow-sm">
         <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
           <div>
             <div className="text-sm font-semibold">Создание проекта</div>

@@ -43,7 +43,7 @@ export function ProjectOnboarding({ projects, roles, reason }: ProjectOnboarding
   return (
     <div className="space-y-6">
       {reasonMessage ? (
-        <Card>
+        <Card className="shadow-glow-sm">
           <CardHeader>
             <CardTitle>Требуется проектный контекст</CardTitle>
             <CardDescription>{reasonMessage}</CardDescription>
@@ -51,7 +51,7 @@ export function ProjectOnboarding({ projects, roles, reason }: ProjectOnboarding
         </Card>
       ) : null}
 
-      <Card>
+      <Card className="shadow-glow-sm">
         <CardHeader>
           <CardTitle>Доступные проекты</CardTitle>
           <CardDescription>Выберите проект для работы в консоли.</CardDescription>
@@ -91,7 +91,7 @@ export function ProjectOnboarding({ projects, roles, reason }: ProjectOnboarding
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-glow-sm">
         <CardHeader>
           <CardTitle>Указать проект вручную</CardTitle>
           <CardDescription>Введите идентификатор проекта, если он предоставлен администратором.</CardDescription>
@@ -108,7 +108,7 @@ export function ProjectOnboarding({ projects, roles, reason }: ProjectOnboarding
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-glow-sm">
         <CardHeader>
           <CardTitle>Создание нового проекта</CardTitle>
           <CardDescription>Доступно только администраторам.</CardDescription>
