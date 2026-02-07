@@ -363,9 +363,10 @@ func main() {
 			os.Exit(2)
 		}
 		consoleProxy := newConsoleProxy(logger, upstream)
-		consoleHandler := consoleAuthProxy(logger, authCfg, authenticator, consoleProxy)
+		consoleHandler := consoleAuthProxy(logger, authCfg, authenticator, consoleProxy, consoleUpstreamRaw)
 		mux.Handle("/console", consoleHandler)
 		mux.Handle("/console/", consoleHandler)
+		mux.Handle("/_next/", consoleHandler)
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

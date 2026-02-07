@@ -84,6 +84,7 @@ console:
   publicBaseURL: "${PUBLIC_BASE_URL}"
   allowedReturnToOrigins:
     - "${PUBLIC_BASE_URL}"
+    - "${CONSOLE_UPSTREAM_URL}"
 ui:
   enabled: $( [[ "$UI_ENABLED" == "1" ]] && echo true || echo false )
 postgres:

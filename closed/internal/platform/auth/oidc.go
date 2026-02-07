@@ -98,6 +98,10 @@ func (s *OIDCService) LoginHandler() (http.HandlerFunc, error) {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		if redirectURL := canonicalRedirectURL(r, s.cfg); redirectURL != "" {
+			http.Redirect(w, r, redirectURL, http.StatusFound)
+			return
+		}
 		returnTo := SafeReturnTo(r.URL.Query().Get("return_to"), s.cfg)
 
 		state, err := randomBase64URL(32)
@@ -139,6 +143,10 @@ func (s *OIDCService) CallbackHandler() (http.HandlerFunc, error) {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		if redirectURL := canonicalRedirectURL(r, s.cfg); redirectURL != "" {
+			http.Redirect(w, r, redirectURL, http.StatusFound)
+			return
+		}
 		stateQuery := r.URL.Query().Get("state")
 		code := r.URL.Query().Get("code")
 		if stateQuery == "" || code == "" {
@@ -370,6 +378,23 @@ func parseOrigin(raw string) string {
 		return ""
 	}
 	return strings.ToLower(parsed.Scheme + "://" + parsed.Host)
+}
+
+func canonicalRedirectURL(r *http.Request, cfg Config) string {
+	base := strings.TrimSpace(cfg.PublicBaseURL)
+	if base == "" || r == nil {
+		return ""
+	}
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	if strings.EqualFold(parsed.Host, r.Host) {
+		return ""
+	}
+	parsed.Path = r.URL.Path
+	parsed.RawQuery = r.URL.RawQuery
+	return parsed.String()
 }
 
 func setShortCookie(w http.ResponseWriter, name string, value string, cfg Config) {
