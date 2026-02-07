@@ -90,6 +90,12 @@ spec:
                   name: {{ include "animus-datapilot.secretsName" $ }}
                   key: oidcClientSecret
             {{- end }}
+            - name: ANIMUS_CONSOLE_UPSTREAM_URL
+              value: {{ $.Values.console.upstreamURL | default (include "animus-datapilot.uiServiceURL" $) | quote }}
+            - name: ANIMUS_PUBLIC_BASE_URL
+              value: {{ $.Values.console.publicBaseURL | quote }}
+            - name: ANIMUS_ALLOWED_RETURN_TO_ORIGINS
+              value: {{ join "," (default (list) $.Values.console.allowedReturnToOrigins) | quote }}
             - name: DATASET_REGISTRY_BASE_URL
               value: {{ printf "http://%s-dataset-registry:%d" (include "animus-datapilot.fullname" $) ($datasetRegistry.port | int) | quote }}
             - name: QUALITY_BASE_URL

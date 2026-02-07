@@ -89,6 +89,10 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- default .Values.image.pullPolicy .Values.ui.image.pullPolicy -}}
 {{- end -}}
 
+{{- define "animus-datapilot.uiServiceURL" -}}
+{{- printf "http://%s-ui:%d" (include "animus-datapilot.fullname" .) (.Values.ui.port | int) -}}
+{{- end -}}
+
 {{- define "animus-datapilot.gatewayServiceURL" -}}
 {{- printf "http://%s-gateway:%d" (include "animus-datapilot.fullname" .) (.Values.services.gateway.port | int) -}}
 {{- end -}}

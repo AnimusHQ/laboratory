@@ -163,6 +163,15 @@
         }
       }
     },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "upstreamURL": {"type": "string"},
+        "publicBaseURL": {"type": "string"},
+        "allowedReturnToOrigins": {"type": "array", "items": {"type": "string"}}
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": false,

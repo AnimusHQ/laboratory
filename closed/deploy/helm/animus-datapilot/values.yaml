@@ -94,6 +94,11 @@ ui:
   env:
     gatewayURL: ""
 
+console:
+  upstreamURL: ""
+  publicBaseURL: ""
+  allowedReturnToOrigins: []
+
 observability:
   metrics:
     enabled: true
