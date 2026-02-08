@@ -32,6 +32,7 @@ CONSOLE_PORT="${ANIMUS_CONSOLE_PORT:-3001}"
 UI_ENABLED="${ANIMUS_SYSTEM_UI_ENABLED:-0}"
 CONSOLE_DEV="${ANIMUS_CONSOLE_DEV:-1}"
 BUILD_IMAGES="${ANIMUS_SYSTEM_BUILD_IMAGES:-1}"
+IMAGE_TAG="${ANIMUS_IMAGE_TAG:-}"
 
 HOST_IP="${ANIMUS_HOST_IP:-}"
 if [[ -z "$HOST_IP" ]]; then
@@ -51,12 +52,20 @@ CHART_DIR="${ROOT_DIR}/closed/deploy/helm/animus-datapilot"
 CHART_WORK_DIR="${CACHE_DIR}/animus-datapilot-chart"
 MIGRATIONS_SRC="${ROOT_DIR}/closed/migrations"
 
+if [[ -z "$IMAGE_TAG" ]]; then
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT_DIR" rev-parse --short HEAD >/dev/null 2>&1; then
+    IMAGE_TAG="local-$(git -C "$ROOT_DIR" rev-parse --short HEAD)"
+  else
+    IMAGE_TAG="local-$(date +%Y%m%d%H%M%S)"
+  fi
+fi
+
 if [[ "$BUILD_IMAGES" == "1" ]]; then
   require_bin make
   if [[ "$UI_ENABLED" == "1" ]]; then
-    ANIMUS_BUILD_UI=1 make images-build
+    ANIMUS_BUILD_UI=1 ANIMUS_IMAGE_TAG="$IMAGE_TAG" make images-build
   else
-    ANIMUS_BUILD_UI=0 make images-build
+    ANIMUS_BUILD_UI=0 ANIMUS_IMAGE_TAG="$IMAGE_TAG" make images-build
   fi
 fi
 
@@ -112,6 +121,8 @@ cat >"$VALUES_FILE" <<EOFVALUES
 auth:
   mode: oidc
   sessionCookieSecure: false
+image:
+  tag: "${IMAGE_TAG}"
 oidc:
   issuerURL: "${OIDC_ISSUER_URL}"
   clientID: "${OIDC_CLIENT_ID}"
@@ -141,16 +152,16 @@ EOFVALUES
 
 if [[ "${ANIMUS_SYSTEM_LOAD_IMAGES:-1}" == "1" ]]; then
   IMAGES=(
-    "animus/gateway:latest"
-    "animus/experiments:latest"
-    "animus/dataset-registry:latest"
-    "animus/quality:latest"
-    "animus/lineage:latest"
-    "animus/audit:latest"
-    "animus/dataplane:latest"
+    "animus/gateway:${IMAGE_TAG}"
+    "animus/experiments:${IMAGE_TAG}"
+    "animus/dataset-registry:${IMAGE_TAG}"
+    "animus/quality:${IMAGE_TAG}"
+    "animus/lineage:${IMAGE_TAG}"
+    "animus/audit:${IMAGE_TAG}"
+    "animus/dataplane:${IMAGE_TAG}"
   )
   if [[ "$UI_ENABLED" == "1" ]]; then
-    IMAGES+=("animus/ui:latest")
+    IMAGES+=("animus/ui:${IMAGE_TAG}")
   fi
   for img in "${IMAGES[@]}"; do
     if docker image inspect "$img" >/dev/null 2>&1; then
@@ -175,6 +186,7 @@ helm upgrade --install "$DATAPLANE_RELEASE" "$ROOT_DIR/closed/deploy/helm/animus
   --namespace "$NAMESPACE" \
   --create-namespace \
   --set auth.internalAuthSecret="$INTERNAL_AUTH_SECRET" \
+  --set image.tag="$IMAGE_TAG" \
   --set controlPlane.baseURL="http://${DATAPILOT_FULLNAME}-gateway:8080"
 
 kubectl -n "$NAMESPACE" set env deployment/"${DATAPILOT_FULLNAME}"-experiments \
@@ -255,6 +267,7 @@ export ANIMUS_HOST_IP="${HOST_IP}"
 export ANIMUS_GATEWAY_URL="http://${HOST_IP}:${GATEWAY_PORT}"
 export ANIMUS_PUBLIC_BASE_URL="${PUBLIC_BASE_URL}"
 export ANIMUS_CONSOLE_UPSTREAM_URL="${CONSOLE_UPSTREAM_URL}"
+export ANIMUS_IMAGE_TAG="${IMAGE_TAG}"
 ENVEOF
 
 echo "system-prod-up: gateway port-forward on :${GATEWAY_PORT}"
