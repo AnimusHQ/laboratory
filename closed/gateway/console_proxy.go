@@ -54,7 +54,7 @@ func newConsoleProxy(logger *slog.Logger, upstream *url.URL) http.Handler {
 	return proxy
 }
 
-func consoleAuthProxy(logger *slog.Logger, cfg auth.Config, authenticator auth.Authenticator, proxy http.Handler, consolePublicURL string) http.Handler {
+func consoleAuthProxy(logger *slog.Logger, cfg auth.Config, authenticator auth.Authenticator, proxy http.Handler, publicBaseURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if authenticator == nil {
 			proxy.ServeHTTP(w, r)
@@ -64,8 +64,8 @@ func consoleAuthProxy(logger *slog.Logger, cfg auth.Config, authenticator auth.A
 		if err != nil {
 			if errors.Is(err, auth.ErrUnauthenticated) {
 				returnToRaw := r.URL.RequestURI()
-				if consolePublicURL != "" {
-					if base, err := url.Parse(consolePublicURL); err == nil && base.Scheme != "" && base.Host != "" {
+				if publicBaseURL != "" {
+					if base, err := url.Parse(publicBaseURL); err == nil && base.Scheme != "" && base.Host != "" {
 						base.Path = strings.TrimSuffix(base.Path, "/") + r.URL.Path
 						base.RawQuery = r.URL.RawQuery
 						returnToRaw = base.String()

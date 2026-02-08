@@ -363,7 +363,7 @@ func main() {
 			os.Exit(2)
 		}
 		consoleProxy := newConsoleProxy(logger, upstream)
-		consoleHandler := consoleAuthProxy(logger, authCfg, authenticator, consoleProxy, consoleUpstreamRaw)
+		consoleHandler := consoleAuthProxy(logger, authCfg, authenticator, consoleProxy, authCfg.PublicBaseURL)
 		mux.Handle("/console", consoleHandler)
 		mux.Handle("/console/", consoleHandler)
 		mux.Handle("/_next/", consoleHandler)
