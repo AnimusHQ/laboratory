@@ -23,6 +23,10 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- $repo := .Values.image.repository -}}
 {{- $tag := .Values.image.tag -}}
 {{- $digest := .Values.image.digest -}}
+{{- $profile := lower (default "dev" .Values.profile) -}}
+{{- if and (eq $profile "production") (eq (trim $digest) "") -}}
+{{- fail "image.digest is required when profile=production" -}}
+{{- end -}}
 {{- if $digest -}}
 {{- printf "%s/dataplane@%s" $repo $digest -}}
 {{- else -}}

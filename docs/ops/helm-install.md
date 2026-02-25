@@ -1,6 +1,6 @@
 # Helm‑установка Animus Datalab (Control Plane + Data Plane)
 
-Документ описывает базовую установку компонентов Animus через Helm‑чарты.
+Документ описывает базовую установку компонентов Animus через Helm‑чарты, что снижает риск расхождения параметров между CP и DP.
 
 ## 1. Предпосылки
 
@@ -76,11 +76,11 @@ secrets:
 ```bash
 kubectl create namespace animus-system
 
-helm upgrade --install animus-datapilot ./closed/deploy/helm/animus-datapilot \
+helm upgrade --install animus-datapilot ./deploy/helm/animus-datapilot \
   --namespace animus-system \
   --values values-datapilot.yaml
 
-helm upgrade --install animus-dataplane ./closed/deploy/helm/animus-dataplane \
+helm upgrade --install animus-dataplane ./deploy/helm/animus-dataplane \
   --namespace animus-system \
   --values values-dataplane.yaml
 ```

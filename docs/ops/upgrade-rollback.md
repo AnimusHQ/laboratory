@@ -1,6 +1,6 @@
 # Обновление и откат (Control Plane + Data Plane)
 
-Документ описывает воспроизводимую процедуру обновления и отката Helm‑релизов с проверкой совместимости.
+Документ описывает воспроизводимую процедуру обновления и отката Helm‑релизов с проверкой совместимости, что снижает риск потери данных и несогласованных версий.
 
 ## 1. Предпосылки
 
@@ -27,11 +27,11 @@ helm -n animus-system list
 
 **Команды:**
 ```bash
-helm upgrade animus-datapilot ./closed/deploy/helm/animus-datapilot \
+helm upgrade animus-datapilot ./deploy/helm/animus-datapilot \
   --namespace animus-system \
   --values values-datapilot.yaml
 
-helm upgrade animus-dataplane ./closed/deploy/helm/animus-dataplane \
+helm upgrade animus-dataplane ./deploy/helm/animus-dataplane \
   --namespace animus-system \
   --values values-dataplane.yaml
 ```

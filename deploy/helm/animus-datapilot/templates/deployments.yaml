@@ -3,7 +3,6 @@
 {{- $experiments := index .Values.services "experiments" -}}
 {{- $lineage := index .Values.services "lineage" -}}
 {{- $audit := index .Values.services "audit" -}}
-{{- $trainingExecutor := lower (default "disabled" .Values.training.executor) -}}
 {{- range $name, $svc := .Values.services }}
 apiVersion: apps/v1
 kind: Deployment
@@ -24,14 +23,13 @@ spec:
         {{- include "animus-datapilot.labels" $ | nindent 8 }}
         app.kubernetes.io/component: {{ $name }}
     spec:
-      {{- if and (eq $name "experiments") (or (eq $trainingExecutor "kubernetes") (eq $trainingExecutor "k8s")) }}
-      serviceAccountName: {{ include "animus-datapilot.fullname" $ }}-experiments
-      {{- end }}
       containers:
         - name: {{ $name }}
           image: "{{ include "animus-datapilot.serviceImage" (dict "root" $ "name" $name) }}"
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           env:
+            - name: ANIMUS_PROFILE
+              value: {{ default "dev" $.Values.profile | quote }}
             - name: {{ upper (replace "-" "_" $name) }}_HTTP_ADDR
               value: "0.0.0.0:{{ $svc.port }}"
             - name: DATABASE_URL
@@ -139,8 +137,6 @@ spec:
               value: {{ $.Values.training.datapilotURL | default (include "animus-datapilot.gatewayServiceURL" $) | quote }}
             - name: ANIMUS_RUN_TOKEN_TTL
               value: {{ $.Values.training.runTokenTTL | quote }}
-            - name: ANIMUS_TRAINING_EXECUTOR
-              value: {{ $trainingExecutor | quote }}
             - name: ANIMUS_TRAINING_SYNC_INTERVAL
               value: {{ $.Values.training.syncInterval | quote }}
             - name: ANIMUS_EVALUATION_ENABLED

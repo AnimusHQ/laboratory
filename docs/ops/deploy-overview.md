@@ -1,6 +1,6 @@
 # Обзор развёртывания Animus Datalab
 
-**Назначение:** данный документ описывает архитектуру развёртывания Control Plane (CP), Data Plane (DP), Gateway и зависимостей, а также содержит краткий воспроизводимый quickstart. Полные процедуры см. в профильных документах.
+**Назначение:** документ фиксирует архитектуру развёртывания Control Plane (CP), Data Plane (DP), Gateway и зависимостей, что снижает риск несогласованной установки. Краткий воспроизводимый quickstart приведён ниже; полные процедуры см. в профильных документах.
 
 ## 1. Архитектура развертывания и границы доверия
 
@@ -65,14 +65,14 @@
 kubectl create namespace animus-system
 
 # установка Control Plane (datapilot)
-helm upgrade --install animus-datapilot ./closed/deploy/helm/animus-datapilot \
+helm upgrade --install animus-datapilot ./deploy/helm/animus-datapilot \
   --namespace animus-system \
-  --values ./closed/deploy/helm/animus-datapilot/values.yaml
+  --values ./deploy/helm/animus-datapilot/values.yaml
 
 # установка Data Plane (dataplane)
-helm upgrade --install animus-dataplane ./closed/deploy/helm/animus-dataplane \
+helm upgrade --install animus-dataplane ./deploy/helm/animus-dataplane \
   --namespace animus-system \
-  --values ./closed/deploy/helm/animus-dataplane/values.yaml
+  --values ./deploy/helm/animus-dataplane/values.yaml
 ```
 
 **Ожидаемый результат:**

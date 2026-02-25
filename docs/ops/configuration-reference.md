@@ -1,6 +1,6 @@
 # Справочник конфигурации Helm
 
-Документ содержит нормализованный перечень параметров Helm‑чартов Animus Datalab. Источник истины — `values.schema.json` каждого чарта.
+Документ содержит нормализованный перечень параметров Helm‑чартов Animus Datalab, что снижает риск несогласованной конфигурации. Источник истины — `values.schema.json` каждого чарта.
 
 ## 1. Общие правила
 
@@ -147,5 +147,5 @@
 
 ## 4. Ссылки
 
-- `closed/deploy/helm/animus-datapilot/values.schema.json`
-- `closed/deploy/helm/animus-dataplane/values.schema.json`
+- `deploy/helm/animus-datapilot/values.schema.json`
+- `deploy/helm/animus-dataplane/values.schema.json`

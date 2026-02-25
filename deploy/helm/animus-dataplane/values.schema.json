@@ -6,6 +6,10 @@
   "properties": {
     "nameOverride": {"type": "string"},
     "fullnameOverride": {"type": "string"},
+    "profile": {
+      "type": "string",
+      "enum": ["dev", "production"]
+    },
     "image": {
       "type": "object",
       "additionalProperties": false,

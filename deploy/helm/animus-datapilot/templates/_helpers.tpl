@@ -54,10 +54,14 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- $name := .name -}}
 {{- $repo := $root.Values.image.repository -}}
 {{- $tag := $root.Values.image.tag -}}
+{{- $profile := lower (default "dev" $root.Values.profile) -}}
 {{- $digestMap := $root.Values.image.digests | default dict -}}
 {{- $digest := get $digestMap $name | default "" -}}
 {{- if and (eq $digest "") $root.Values.image.digest -}}
 {{- $digest = $root.Values.image.digest -}}
+{{- end -}}
+{{- if and (eq $profile "production") (eq (trim $digest) "") -}}
+{{- fail (printf "image digest is required for service %s when profile=production" $name) -}}
 {{- end -}}
 {{- if $digest -}}
 {{- printf "%s/%s@%s" $repo $name $digest -}}
@@ -70,6 +74,10 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- $repo := .Values.ui.image.repository | default "" -}}
 {{- $tag := .Values.ui.image.tag | default "" -}}
 {{- $digest := .Values.ui.image.digest | default "" -}}
+{{- $profile := lower (default "dev" .Values.profile) -}}
+{{- if and (eq $profile "production") (.Values.ui.enabled) (eq (trim $digest) "") -}}
+{{- fail "ui.image.digest is required when profile=production and ui.enabled=true" -}}
+{{- end -}}
 {{- if $repo -}}
 {{- if $digest -}}
 {{- printf "%s@%s" $repo $digest -}}
