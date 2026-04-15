@@ -4,1254 +4,905 @@
 
 > **Enterprise digital laboratory for machine learning** that organizes the full ML development lifecycle in a managed, reproducible form within a single operational context with common execution, security, and audit rules.
 
-**Language:** Go / Python / SQL  •
-**Execution model:** Control Plane + Data Plane  •
-**Runtime:** Kubernetes  •
-**Source of truth:** PostgreSQL  •
-**Artifact storage:** S3-compatible object storage
+**Primary language:** Go (services)
+**Data / policy layer:** PostgreSQL migrations (SQL/PLpgSQL)
+**Runtime:** Kubernetes (production) • Docker Compose (local development and demo)
+**Execution model:** Control Plane (**Animus DataPilot**) + Data Plane (**Animus DataPlane**)
+**Authoritative metadata store:** PostgreSQL
+**Object and artifact storage:** S3-compatible object storage
+**Contracts:** OpenAPI and baseline specifications in `core/contracts/*`
+
+---
+
+## Scope and repository model
+
+This repository is the open-core host for **Animus Datalab**.
+
+### Canonical roots
+
+The stable top-level roots used by the codebase, scripts, and deployment assets are:
+
+* `core/contracts` — canonical API contracts, schemas, and compatibility baselines
+* `deploy` — Helm charts, Dockerfiles, and policy assets
+* `closed/*` — Control Plane and Data Plane service implementations
+* `scripts` — development, CI, hygiene, and release tooling
+* `docs` — enterprise, operational, security, and architecture documentation
+
+### Submodules and migration stubs
+
+The repository contains scaffolding for an externalized split model:
+
+* `./enterprise` — target location for enterprise repository content
+* `./sdk` — target location for SDK repository content
+
+During migration, several legacy paths remain as explicit compatibility shims and should not be treated as canonical sources of truth:
+
+* `open/api` — legacy contracts shim; use `core/contracts/*`
+* `open/sdk` — legacy SDK shim; use `sdk`
+* `closed/deploy` — legacy deploy shim; use `deploy/*`
+* `closed/scripts` — legacy enterprise scripts shim
+
+When repository structure and generated assets disagree, the canonical sources are:
+
+1. migrations in `closed/migrations/`
+2. deployment values in `deploy/helm/*/values.yaml`
+3. service implementations in `closed/*`
+4. contracts in `core/contracts/*`
+5. operational and security docs in `docs/*`
+
+---
 
 ## Overview
 
-Animus Datalab is a centralized ML platform designed for enterprise environments where **reproducibility**, **auditability**, and **security** are non-negotiable. It manages the complete lifecycle from datasets through experiments, runs, artifacts, and model promotion — all within a single governance context.
+Animus Datalab is a centralized ML platform for enterprise environments where **reproducibility**, **auditability**, and **security** are mandatory platform properties rather than best-effort conventions.
 
-The platform exists to solve a specific operational problem:
+At a system level, the platform separates:
 
-* keep **dataset versions, code references, environment locks, and execution parameters** centralized, immutable, and authoritative,
-* execute **user workloads in isolated, containerized environments** on Kubernetes with enforced resource and network policies,
-* produce **deterministic, reproducible runs** defined by the tuple (DatasetVersion, CodeRef commit SHA, EnvironmentLock, parameters, policy snapshot),
-* maintain a **complete, append-only audit trail** for every state-changing action, access event, and privilege change,
-* enforce **deny-by-default security** with SSO, project-scoped RBAC, and secrets management.
+* a **Control Plane** that stores authoritative metadata, evaluates policy, governs access, mediates artifact operations, and records immutable audit evidence
+* a **Data Plane** that executes untrusted user workloads in isolated Kubernetes environments and reports execution evidence back to the Control Plane
+
+The platform exists to solve the following operational problem set:
+
+* keep **dataset versions, run specs, execution plans, policy decisions, and audit records** centralized and authoritative
+* execute **user workloads in isolated containers** on Kubernetes with explicit control-plane mediation
+* make runs **reproducible and explainable** through immutable bindings, stable hashing, persisted execution plans, and evidence records
+* preserve a **complete append-only audit trail** for state-changing operations and protected access
+* enforce a **deny-by-default security model** with project scoping, RBAC, session controls, and internal-only service boundaries
 
 ### Intended users
 
-* **Data scientists and ML engineers** who need managed, reproducible experiment workflows with dataset versioning, artifact tracking, and model promotion.
-* **Platform operators** who need controlled provisioning, quota enforcement, observability, and production-grade deployment for on-premise, private cloud, or air-gapped environments.
-* **Security and compliance teams** who require append-only audit, RBAC enforcement, secrets redaction, and SIEM integration.
-* **Maintainers and engineers** who need a clear layered architecture with strict Control Plane / Data Plane separation and predictable operational behavior.
+* **Data scientists and ML engineers** who need managed execution, versioned datasets, artifact tracking, and reproducibility evidence
+* **Platform operators** who need deployment automation, observability, upgrade safety, quota controls, and air-gapped support
+* **Security and compliance teams** who need immutable audit, policy enforcement, bounded trust zones, and export pipelines to SIEM systems
+* **Maintainers and engineers** who need explicit module boundaries, deterministic behavior, and a documented separation between governance and execution
 
 ### Core capabilities
 
-* Control Plane / Data Plane separation with strict trust boundaries.
-* Project-scoped isolation for all domain entities and operations.
-* Dataset and DatasetVersion persistence with immutability enforcement.
-* Run execution with deterministic planning and plan hashing.
-* PipelineSpec validation with cycle detection and reference verification.
-* Artifact storage with presigned URLs, checksums, retention policies, and legal hold.
-* Append-only audit with NDJSON export and SIEM integration readiness.
-* OIDC (and optional SAML) authentication with session TTL and forced logout.
-* RBAC matrix with deny-by-default posture and object-level authorization.
-* Model registry with validation/approval workflows and export policy controls.
-* Managed developer environments with TTL, quotas, and audited remote access.
-* Python SDK for programmatic interaction (git submodule).
+* Control Plane / Data Plane separation with explicit trust boundaries
+* project-scoped metadata and authorization boundaries
+* immutable dataset version metadata and integrity fields
+* persisted run specifications and immutable execution plans
+* deterministic planning and stable specification hashing
+* artifact mediation through S3-compatible object storage
+* append-only audit with export-ready evidence records
+* OIDC-based session handling with production cookie controls
+* deny-by-default RBAC with role-gated read/write/admin surfaces
+* execution through Kubernetes-backed workload launching in the Data Plane
+* signed-image and supply-chain enforcement hooks in deployment and CI
+
+---
+
+## Quickstart
+
+## Local development and demo
+
+### Prerequisites
+
+* Go toolchain matching the version declared in `go.mod`
+* Docker with Docker Compose support
+* Python 3 for SDK and supporting tooling where applicable
+* Git
+
+### Bootstrap
+
+```bash
+make bootstrap
+```
+
+### Start the local stack
+
+```bash
+make dev
+```
+
+### Smoke test the stack
+
+```bash
+make dev DEV_ARGS=--smoke
+```
+
+### Tear the stack down
+
+```bash
+make dev DEV_ARGS=--down
+```
+
+Legacy aliases such as `make demo`, `make demo-smoke`, and `make demo-down` may exist for compatibility, but `make dev` is the canonical entrypoint.
+
+## Kubernetes deployment quickstart
+
+A minimal Helm-based deployment uses the two production charts in `deploy/helm/`:
+
+```bash
+kubectl create namespace animus-system
+
+helm upgrade --install animus-datapilot ./deploy/helm/animus-datapilot \
+  --namespace animus-system \
+  --values ./deploy/helm/animus-datapilot/values.yaml
+
+helm upgrade --install animus-dataplane ./deploy/helm/animus-dataplane \
+  --namespace animus-system \
+  --values ./deploy/helm/animus-dataplane/values.yaml
+```
+
+A typical readiness check is:
+
+```bash
+kubectl -n animus-system get pods
+kubectl -n animus-system port-forward svc/animus-datapilot-gateway 8080:8080
+curl -fsS http://127.0.0.1:8080/readyz
+```
+
+For production, the expected deployment model is:
+
+* external PostgreSQL with backups and restore validation
+* external S3-compatible object storage, or a hardened object-store deployment
+* OIDC mode with secure session configuration
+* a rotated internal auth secret for service-internal channels
+* image digest pinning and optional signed-image policy enforcement
 
 ---
 
 ## Architecture
 
-This repository implements a **Control Plane / Data Plane architecture**. The Control Plane manages governance, policies, metadata, orchestration, and audit — it never executes user code. The Data Plane executes user workloads in isolated, containerized Kubernetes environments.
+Animus Datalab implements a **governance plane + execution plane** model.
+
+The repository’s production deployment model is not a single monolith. It is a multi-service architecture with one public entrypoint, several Control Plane backends, and a dedicated Data Plane executor service.
 
 ### Architecture principles
 
-* **Control Plane never executes user code.**
-* **Data Plane executes in isolated, containerized environments.**
-* **PostgreSQL is the authoritative metadata store.**
-* **S3-compatible object storage holds all artifacts.**
-* **A production-run is uniquely defined by DatasetVersion + CodeRef commit SHA + EnvironmentLock + parameters + policy snapshot.**
-* **All significant actions are recorded as AuditEvent.**
-* **All domain entities belong to exactly one Project; cross-Project dependencies are prohibited.**
-* **The system has no hidden state that affects execution results.**
-* **Deny-by-default security posture; explicit allowlists.**
-* **Secrets are ephemeral, minimal in scope, and never exposed in UI, logs, metrics, or artifacts.**
+* **Control Plane services do not execute untrusted user code.**
+* **Data Plane services execute untrusted workloads and are not authoritative for business state.**
+* **PostgreSQL is the source of truth** for metadata, immutable records, policy decisions, and execution evidence metadata.
+* **S3-compatible object storage stores blobs**, while PostgreSQL stores references, metadata, and integrity values.
+* **Critical entities are immutable by design and enforced at the database layer** where required.
+* **Security posture is deny-by-default**, with explicit RBAC and internal-only control channels.
+* **Project scoping is the default business boundary** for datasets, runs, artifacts, and permissions.
+* **Operational truth is DB-first**: central state is persisted and reconciled explicitly rather than inferred from workload state alone.
 
-### 1. System context
+### Production service composition
+
+#### Control Plane — Animus DataPilot
+
+The Control Plane is deployed by `deploy/helm/animus-datapilot` and is composed of the following service surfaces by default:
+
+* `gateway` — public entrypoint, session/auth handling, request routing, readiness
+* `dataset-registry` — dataset and dataset-version operations
+* `quality` — quality and admin-oriented service surface where enabled
+* `experiments` — experiments, runs, planning, policy evaluation, execution coordination
+* `lineage` — lineage endpoints and graph-oriented administrative capabilities
+* `audit` — append-only audit append and export surfaces
+* optional `ui` — browser-facing console, depending on deployment settings
+
+Default port assignments in chart values are:
+
+* gateway: `8080`
+* dataset-registry: `8081`
+* quality: `8082`
+* experiments: `8083`
+* lineage: `8084`
+* audit: `8085`
+* ui: `3000` when enabled
+
+#### Data Plane — Animus DataPlane
+
+The Data Plane is deployed by `deploy/helm/animus-dataplane` and consists primarily of:
+
+* `dataplane` — internal execution service responsible for launching and reconciling Kubernetes workloads
+
+Default port assignment in chart values is:
+
+* dataplane: `8086`
+
+### System context
 
 ```mermaid
 flowchart LR
-  subgraph Users["Users"]
+  subgraph Users["Users / Clients"]
     DS[Data Scientist]
     OPS[Platform Operator]
     SEC[Security / Compliance]
+    SA[Service Account]
   end
 
-  subgraph ControlPlane["Control Plane"]
-    API[CP API Service]
-    SCHED[Scheduler]
-    WORKER[Background Workers]
+  subgraph CP["Control Plane: Animus DataPilot"]
+    GW[Gateway]
+    EXP[Experiments]
+    DSR[Dataset Registry]
+    LIN[Lineage]
+    AUD[Audit]
+    QLT[Quality]
+    UI[UI optional]
     DB[(PostgreSQL)]
     OBJ[(S3-compatible Object Store)]
   end
 
-  subgraph DataPlane["Data Plane (Kubernetes)"]
-    EXEC[DP Executor]
-    RUN1[Run Pod A]
-    RUN2[Run Pod B]
-    DEV[Dev Environment Pod]
+  subgraph DP["Data Plane: Animus DataPlane"]
+    DPAPI[DataPlane Service]
+    K8S[(Kubernetes)]
+    JOBS[Run Jobs / Pods]
   end
 
-  subgraph External["External Systems"]
-    IDP[Identity Provider - OIDC/SAML]
-    VAULT[Secrets Manager]
-    SIEM[SIEM / Monitoring]
-    GIT[Git Repository]
+  subgraph EXT["External Systems"]
+    IDP[OIDC Provider]
+    SECRETS[Secrets Provider]
+    SIEM[SIEM / Log Pipeline]
   end
 
-  DS --> API
-  OPS --> API
-  SEC --> API
+  DS --> GW
+  OPS --> GW
+  SEC --> GW
+  SA --> GW
 
-  API <--> DB
-  API <--> OBJ
-  WORKER <--> DB
-  SCHED <--> DB
+  GW --> DSR
+  GW --> EXP
+  GW --> LIN
+  GW --> AUD
+  GW --> QLT
+  UI --> GW
 
-  API --> EXEC
-  SCHED --> EXEC
-  WORKER --> EXEC
+  DSR <--> DB
+  EXP <--> DB
+  LIN <--> DB
+  AUD <--> DB
+  QLT <--> DB
 
-  EXEC --> RUN1
-  EXEC --> RUN2
-  EXEC --> DEV
+  DSR <--> OBJ
+  EXP <--> OBJ
 
-  RUN1 --> OBJ
-  RUN2 --> OBJ
+  GW <--> IDP
+  AUD --> SIEM
 
-  API --> IDP
-  EXEC --> VAULT
-  API --> SIEM
-  API --> GIT
+  EXP -->|internal CP->DP protocol| DPAPI
+  DPAPI --> K8S
+  K8S --> JOBS
+  JOBS --> OBJ
+  DPAPI --> SECRETS
+  DPAPI -->|status / heartbeats / terminal events| EXP
 ```
 
-The Control Plane is the single decision-making authority. Users interact only with the CP API. The Data Plane receives execution instructions from the Control Plane and reports back status, heartbeats, and terminal states.
-
-### 2. Trust boundary view
+### Trust boundaries
 
 ```mermaid
 flowchart TB
-  subgraph Untrusted["Untrusted Zone"]
-    CLIENT[User Clients / SDK]
+  subgraph Untrusted["Untrusted zone"]
+    CLIENT[Clients / SDK / Browser]
   end
 
-  subgraph Trusted["Trusted Management Zone"]
+  subgraph Trusted["Trusted management zone"]
+    GW[Gateway]
     CP[Control Plane Services]
     DB[(PostgreSQL)]
-    OBJ[(Object Storage)]
+    OBJ[(Object Store)]
   end
 
-  subgraph PartiallyTrusted["Partially Trusted Execution Zone"]
-    DP[Data Plane Executor]
+  subgraph Partial["Partially trusted execution zone"]
+    DP[Data Plane]
     PODS[User Workload Pods]
   end
 
-  subgraph External["External Integration Zone"]
-    IDP[Identity Provider]
-    VAULT[Secrets Manager]
+  subgraph External["External integration zone"]
+    IDP[OIDC]
+    SECRETS[Secrets Provider]
     SIEM[SIEM]
   end
 
-  CLIENT -->|authn required| CP
+  CLIENT --> GW
+  GW --> CP
   CP <--> DB
   CP <--> OBJ
-  CP -->|dispatch + reconcile| DP
+  CP --> DP
   DP --> PODS
-  PODS -->|artifacts with checksums| OBJ
-  DP -->|heartbeats + terminal states| CP
-  CP <-->|SSO| IDP
-  DP -->|ephemeral secrets| VAULT
-  CP -->|audit export| SIEM
+  PODS --> OBJ
+  GW <--> IDP
+  DP --> SECRETS
+  CP --> SIEM
 ```
 
-Trust boundaries treat user clients as untrusted, Control Plane as trusted management, Data Plane as partially trusted execution, and external systems as separate zones integrated through contractual interfaces.
+### Internal-only surfaces
 
-### 3. Actor interaction view
+Public traffic is expected to terminate at the Gateway or ingress layer.
 
-```mermaid
-flowchart TB
-  DS[Data Scientist]
-  OPS[Platform Operator]
-  SEC[Security / Compliance]
-  SA[Service Account]
+Internal service-to-service paths are distinct from the public API surface and must not be exposed externally. The internal path families are:
 
-  subgraph DSActions["Data Scientist surface"]
-    SDK[Python SDK]
-    APIUI[API endpoints]
-    DEVENV[Dev Environment]
-  end
+* `/internal/cp/*`
+* `/internal/dp/*`
 
-  subgraph OPSActions["Operator surface"]
-    DEPLOY[Install / Upgrade / Rollback]
-    MONITOR[Observability dashboards]
-    QUOTA[Quota / Policy management]
-  end
+These are authenticated separately from user RBAC using a shared internal auth secret.
 
-  subgraph SECActions["Security surface"]
-    AUDIT[Audit export / SIEM]
-    RBAC[Role / policy configuration]
-    SECRETS[Secrets rotation]
-  end
+### Architectural responsibilities
 
-  DS --> SDK
-  DS --> APIUI
-  DS --> DEVENV
+#### Gateway
 
-  OPS --> DEPLOY
-  OPS --> MONITOR
-  OPS --> QUOTA
+* public HTTP entrypoint
+* authentication and session handling
+* routing to backend Control Plane services
+* request boundary enforcement
+* readiness and operational surface
 
-  SEC --> AUDIT
-  SEC --> RBAC
-  SEC --> SECRETS
+#### Dataset Registry
 
-  SA --> APIUI
-```
+* dataset and dataset-version metadata operations
+* object-store mediation for dataset payload flows
+* integrity-oriented metadata persistence
 
-Role separation is enforced server-side through project-scoped RBAC with deny-by-default posture. Service accounts are subject to the same RBAC and are audited.
+#### Experiments
 
-### 4. Use-case view
+* run submission and orchestration
+* persisted run specs and execution plans
+* policy evaluation and approval integration
+* Control Plane to Data Plane coordination
+* status reconciliation and terminal state handling
 
-```mermaid
-flowchart LR
-  DS[Data Scientist]
-  OPS[Operator]
-  SEC[Security]
+#### Audit
 
-  subgraph DSUseCases["Data Scientist use cases"]
-    UC1[Register dataset version]
-    UC2[Submit run with full bindings]
-    UC3[View run status and artifacts]
-    UC4[Promote model version]
-    UC5[Launch dev environment]
-    UC6[Query lineage graph]
-    UC7[Export reproducibility bundle]
-  end
+* append-only audit record ingestion
+* export surfaces for downstream evidence pipelines
+* administrative visibility into security-significant actions
 
-  subgraph OPSUseCases["Operator use cases"]
-    UO1[Install / upgrade platform]
-    UO2[Configure project quotas]
-    UO3[Monitor cluster health]
-    UO4[Execute backup / DR drills]
-    UO5[Manage retention policies]
-  end
+#### Lineage
 
-  subgraph SECUseCases["Security use cases"]
-    US1[Configure SSO integration]
-    US2[Manage RBAC role bindings]
-    US3[Export audit to SIEM]
-    US4[Apply legal hold]
-    US5[Rotate secrets]
-  end
+* lineage-oriented query and graph surfaces
+* administrative or restricted graph traversal use cases
 
-  DS --> UC1
-  DS --> UC2
-  DS --> UC3
-  DS --> UC4
-  DS --> UC5
-  DS --> UC6
-  DS --> UC7
+#### Quality
 
-  OPS --> UO1
-  OPS --> UO2
-  OPS --> UO3
-  OPS --> UO4
-  OPS --> UO5
+* quality and validation-oriented service surface
+* deployment slot may be optional depending on distribution or rollout stage
 
-  SEC --> US1
-  SEC --> US2
-  SEC --> US3
-  SEC --> US4
-  SEC --> US5
-```
+#### Data Plane
 
-### 5. High-level container view
+* workload launch into Kubernetes
+* reconciliation of workload status
+* heartbeats and terminal-state reporting back to the Control Plane
+* bounded secret injection at execution time
+* execution evidence emission, not business-state authority
 
-```mermaid
-flowchart TB
-  subgraph Runtime["Runtime containers / processes"]
-    API[CP API]
-    SCHED[Scheduler]
-    WORKER[Workers]
-    DPEXEC[DP Executor]
-    MIGRATE[Migrate]
-    DEMO[Demo / Quickstart]
-  end
+---
 
-  subgraph Internal["Internal packages"]
-    DOMAIN[Domain layer]
-    SERVICE[Service layer]
-    REPO[Repository layer]
-    STORAGE[Object storage abstraction]
-    AUDITPKG[Audit subsystem]
-    DSREG[Dataset registry]
-    EXPRUNS[Experiments / Runs]
-    GATEWAY[Gateway]
-    LINEAGE[Lineage]
-    QUALITY[Quality]
-    RUNTIMEEXEC[Runtime execution]
-    PLATFORM[Platform / Config]
-  end
+## Security and governance model
 
-  API --> SERVICE
-  SCHED --> SERVICE
-  WORKER --> SERVICE
+### Authentication
 
-  SERVICE --> DOMAIN
-  SERVICE --> REPO
-  SERVICE --> STORAGE
-  SERVICE --> AUDITPKG
+The production authentication mode is configurable and expected to use OIDC in real environments.
 
-  DPEXEC --> RUNTIMEEXEC
-  DPEXEC --> STORAGE
-```
+Supported deployment-time auth modes include:
 
-### Responsibilities
+* `dev`
+* `oidc`
 
-* **CP API**: all business-facing HTTP endpoints, authentication, authorization, reads, mutations, reproducibility bundle export.
-* **Scheduler**: queue management, priority handling, quota enforcement, dispatch to Data Plane.
-* **Workers**: background reconciliation, health checks, usage collection, quota and expiry enforcement.
-* **DP Executor**: Kubernetes workload launcher, heartbeat reporting, terminal state delivery, artifact commit.
-* **Migrate**: schema evolution for PostgreSQL.
-* **Demo / Quickstart**: containerized local development and smoke testing stack.
+OIDC configuration is supplied through chart values and includes issuer settings, client credentials, claims handling, and session behavior.
 
-### 6. Internal module breakdown
+### Session management
 
-```mermaid
-flowchart LR
-  API[CP API] --> SVC[Service layer]
-  SCHED[Scheduler] --> SVC
-  WORKER[Workers] --> SVC
+In OIDC mode, session handling is cookie-based and configurable for:
 
-  SVC --> DOMAIN[Domain entities]
-  SVC --> PORTS[Service ports]
+* secure-cookie behavior
+* SameSite policy
+* TTL / max-age
+* forced logout handling
 
-  PORTS --> PGREPO[PostgreSQL repositories]
-  PORTS --> OBJSTORE[Object storage adapter]
-  PORTS --> AUDITSTORE[Audit store adapter]
-  PORTS --> OIDCADPT[OIDC / SAML adapter]
-  PORTS --> SECRETADPT[Secrets manager adapter]
-  PORTS --> K8SADPT[Kubernetes adapter]
+### Authorization and RBAC
 
-  DPEXEC[DP Executor] --> K8SADPT
-  DPEXEC --> OBJSTORE
-  DPEXEC --> SECRETADPT
-```
+RBAC is project-scoped and enforced server-side.
 
-#### Layer responsibilities
+Documented default enforcement semantics are:
 
-* **Domain**
-    + domain entities (Project, Dataset, DatasetVersion, Run, Artifact, ModelVersion, AuditEvent, CodeRef, EnvironmentLock, PipelineSpec),
-    + status models and state machines,
-    + value objects,
-    + plan hash computation rules,
-    + VLESS export builder rules (from linked submodule, if applicable).
-* **Service**
-    + orchestrates use cases,
-    + owns business transitions,
-    + depends only on ports (interfaces),
-    + enforces production-run gate requirements.
-* **Infrastructure**
-    + PostgreSQL persistence,
-    + S3-compatible object storage,
-    + OIDC/SAML authentication,
-    + secrets manager integration,
-    + Kubernetes workload management,
-    + audit store and export.
-* **Transport**
-    + HTTP API handlers, middleware, schemas,
-    + CP↔DP execution protocol (internal).
+* `GET`, `HEAD`, and `OPTIONS` require viewer-grade access
+* mutating verbs such as `POST`, `PUT`, `PATCH`, and `DELETE` require editor-grade access
+* audit, lineage, and quality administrative surfaces are restricted beyond standard project roles
+* requests lacking required project scope are rejected unless explicitly exempted by design
+* access denials are logged and auditable
 
-### 7. Data flow
+### Run token restrictions
 
-```mermaid
-flowchart LR
-  SDK[Python SDK / API Client] -->|authn + API calls| API[CP API]
-  API -->|reads/writes| DB[(PostgreSQL)]
-  API -->|presigned URLs / artifact mediation| OBJ[(Object Storage)]
-  API -->|dispatch RunExecutionRequest| DP[DP Executor]
+Execution-bound credentials are constrained. Run-token access is intentionally narrower than user or admin identities and is limited to safe allowlisted capabilities necessary for execution reporting and artifact mediation.
 
-  DP -->|launch workloads| K8S[Kubernetes Pods]
-  K8S -->|artifacts + checksums| OBJ
-  DP -->|heartbeats + terminal states| API
+### Secrets handling
 
-  WORKER[Workers] --> DB
-  WORKER --> DP
+Secrets are intended to come from an external provider or controlled mode and are supplied only where necessary.
 
-  API -->|audit events| AUDIT[Audit Store]
-  AUDIT -->|NDJSON export| SIEM[SIEM]
-```
+Security expectations are:
 
-The platform does not trust Data Plane state as authoritative. The DP provides execution evidence and artifact commits; PostgreSQL remains the canonical source of truth for all metadata.
+* minimal scope
+* bounded lifetime
+* not exposed through UI payloads, logs, or unrelated APIs
+* delivered at execution time rather than persisted as general application state
 
-### 8. Persistence / ER view
+### Control Plane / Data Plane boundary enforcement
+
+A static module boundary is enforced in linting. Control Plane packages are prohibited from importing Data Plane runtime execution internals directly. This preserves the architectural rule that governance code must not become an execution path for untrusted user workloads.
+
+### Supply-chain controls
+
+The repository includes production hardening hooks for:
+
+* image digest pinning
+* SBOM generation
+* vulnerability scanning
+* image signing and verification
+* policy-based signed-image admission enforcement
+
+---
+
+## Contracts, APIs, and schemas
+
+### Canonical contract locations
+
+* `core/contracts/openapi/*.yaml` — per-service OpenAPI contracts
+* `core/contracts/baseline/*.yaml` — compatibility baselines and snapshots
+* `core/contracts/pipeline_spec.yaml` — pipeline specification schema
+
+Legacy compatibility location:
+
+* `open/api` — compatibility shim only, not the canonical contract source
+
+### Public and internal API surfaces
+
+The public surface is exposed through Gateway and typically includes:
+
+* `/api/*`
+* `/auth/*`
+* readiness endpoints such as `/readyz`
+
+Internal CP/DP coordination surfaces are intentionally separate and not part of the public API contract.
+
+### Contract truth model
+
+If behavior appears to differ between prose and implementation, the order of truth is:
+
+1. service code and handlers
+2. migrations and persistence invariants
+3. OpenAPI contracts and schemas
+4. deployment values and documented operational references
+5. README-level summaries such as this document
+
+---
+
+## Persistence, immutability, and execution evidence
+
+The authoritative schema lives in `closed/migrations/*.sql`.
+
+### Persistence model
+
+PostgreSQL stores:
+
+* projects and project-scoped metadata
+* datasets and dataset versions
+* run specifications and execution plans
+* policy versions, decisions, and approvals
+* audit events and integrity fields
+* contextual execution metadata
+
+S3-compatible object storage stores:
+
+* dataset payload objects
+* run outputs and artifacts
+* evidence bundles and related binary material where applicable
+
+### Integrity model
+
+The schema uses integrity-oriented fields such as `integrity_sha256` and content hashes on key records. The object store is not the source of metadata truth; object references and hashes are persisted in PostgreSQL.
+
+### Immutability model
+
+Critical records are protected against mutation or deletion through DB-side enforcement where required.
+
+Examples include:
+
+* dataset versions
+* audit events
+* immutable fields on runs
+* execution plans
+
+The purpose of DB-level immutability is to ensure that replay, audit, and forensic reconstruction do not depend on application-side discipline alone.
+
+### Run model nuance
+
+The schema contains adjacent run concepts reflecting platform evolution:
+
+* `experiment_runs` used by experiment and policy-related subsystems
+* `runs` and `execution_plans` used by the newer pipeline-run track
+
+This is not an accident. It reflects an architectural evolution path where run evidence, policy decisions, and pipeline planning can coexist without rewriting the integrity model.
+
+### Persistence and relationships overview
 
 ```mermaid
 erDiagram
   PROJECTS {
-    uuid id PK
+    text project_id PK
     text name
-    text status
+    jsonb metadata
     timestamptz created_at
-    timestamptz updated_at
+    text created_by
+    text integrity_sha256
   }
 
   DATASETS {
-    uuid id PK
-    uuid project_id FK
+    text dataset_id PK
+    text project_id FK
     text name
-    text description
+    jsonb metadata
     timestamptz created_at
-    timestamptz updated_at
+    text created_by
+    text integrity_sha256
   }
 
   DATASET_VERSIONS {
-    uuid id PK
-    uuid dataset_id FK
-    text version_tag
-    text storage_uri
-    text checksum
-    jsonb schema_ref
-    jsonb stats_ref
-    jsonb lineage_ref
-    boolean immutable
+    text version_id PK
+    text dataset_id FK
+    text project_id
+    bigint ordinal
+    text content_sha256
+    text object_key
+    bigint size_bytes
+    jsonb metadata
     timestamptz created_at
+    text created_by
+    text integrity_sha256
   }
 
-  CODE_REFS {
-    uuid id PK
-    text repo_url
-    text commit_sha
-    boolean immutable
-    timestamptz created_at
-  }
-
-  ENVIRONMENT_LOCKS {
-    uuid id PK
-    text image_digest
-    text sbom_ref
-    jsonb packages
-    boolean immutable
-    timestamptz created_at
-  }
-
-  PIPELINE_SPECS {
-    uuid id PK
-    uuid project_id FK
-    text name
-    jsonb spec
+  RUNS {
+    text run_id PK
+    text project_id FK
+    text idempotency_key
+    text status
+    jsonb pipeline_spec
+    jsonb run_spec
     text spec_hash
     timestamptz created_at
   }
 
-  RUNS {
-    uuid id PK
-    uuid project_id FK
-    uuid dataset_version_id FK
-    uuid code_ref_id FK
-    uuid environment_lock_id FK
-    uuid pipeline_spec_id FK
-    text status
-    text plan_hash
-    jsonb parameters
-    jsonb policy_snapshot
-    timestamptz created_at
-    timestamptz updated_at
-  }
-
-  STEP_ATTEMPTS {
-    uuid id PK
-    uuid run_id FK
-    text step_name
-    int attempt_number
-    text status
-    timestamptz started_at
-    timestamptz finished_at
-  }
-
-  ARTIFACTS {
-    uuid id PK
-    uuid project_id FK
-    uuid run_id FK
-    text storage_uri
-    text checksum
-    jsonb retention_metadata
-    boolean legal_hold
+  EXECUTION_PLANS {
+    text plan_id PK
+    text run_id FK
+    text project_id FK
+    jsonb plan
     timestamptz created_at
   }
 
-  MODEL_VERSIONS {
-    uuid id PK
-    uuid project_id FK
-    uuid run_id FK
-    uuid artifact_id FK
+  POLICIES {
+    text policy_id PK
     text name
-    text version
-    text status
     timestamptz created_at
-    timestamptz updated_at
+    text created_by
+    text integrity_sha256
+  }
+
+  POLICY_VERSIONS {
+    text policy_version_id PK
+    text policy_id FK
+    int version
+    text status
+    text spec_yaml
+    jsonb spec_json
+    text spec_sha256
+    timestamptz created_at
+    text created_by
+    text integrity_sha256
+  }
+
+  POLICY_DECISIONS {
+    text decision_id PK
+    text run_id FK
+    text policy_id FK
+    text policy_version_id FK
+    text policy_sha256
+    jsonb context
+    text context_sha256
+    text decision
+    text rule_id
+    text reason
+    timestamptz created_at
+    text created_by
+    text integrity_sha256
+  }
+
+  POLICY_APPROVALS {
+    text approval_id PK
+    text decision_id FK
+    text run_id FK
+    text status
+    timestamptz requested_at
+    text requested_by
+    timestamptz decided_at
+    text decided_by
+    text reason
+    text integrity_sha256
   }
 
   AUDIT_EVENTS {
-    uuid id PK
-    uuid project_id FK
-    text actor_type
-    text actor_id
+    bigint event_id PK
+    timestamptz occurred_at
+    text actor
     text action
-    text target_type
-    text target_id
-    jsonb metadata_json
-    boolean append_only
-    timestamptz created_at
+    text resource_type
+    text resource_id
+    text request_id
+    inet ip
+    text user_agent
+    jsonb payload
+    text integrity_sha256
   }
 
   PROJECTS ||--o{ DATASETS : contains
-  PROJECTS ||--o{ RUNS : contains
-  PROJECTS ||--o{ ARTIFACTS : contains
-  PROJECTS ||--o{ PIPELINE_SPECS : defines
-  PROJECTS ||--o{ MODEL_VERSIONS : contains
-  PROJECTS ||--o{ AUDIT_EVENTS : records
   DATASETS ||--o{ DATASET_VERSIONS : versions
-  RUNS }o--|| DATASET_VERSIONS : references
-  RUNS }o--|| CODE_REFS : references
-  RUNS }o--|| ENVIRONMENT_LOCKS : references
-  RUNS }o--o| PIPELINE_SPECS : uses
-  RUNS ||--o{ STEP_ATTEMPTS : tracks
-  RUNS ||--o{ ARTIFACTS : produces
-  MODEL_VERSIONS }o--|| RUNS : sources_from
-  MODEL_VERSIONS }o--|| ARTIFACTS : wraps
+  PROJECTS ||--o{ RUNS : contains
+  RUNS ||--|| EXECUTION_PLANS : has
+  POLICIES ||--o{ POLICY_VERSIONS : versions
+  POLICY_VERSIONS ||--o{ POLICY_DECISIONS : evaluated_as
+  POLICY_DECISIONS ||--o{ POLICY_APPROVALS : may_require
 ```
 
-### Persistence notes
+---
 
-* `dataset_versions` are immutable after creation; enforced by database triggers.
-* `code_refs` and `environment_locks` are immutable per run.
-* `audit_events` are append-only and non-disableable.
-* `artifacts` include checksum verification and retention metadata.
-* `runs` store a `policy_snapshot` capturing RBAC, retention, network policy, and template restrictions at the time of execution.
-* All entities are project-scoped; cross-project queries are prohibited.
+## Core flows
 
-### 9. Core sequence: production-run submission
+### Run submission flow
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant User
-  participant SDK as Python SDK
-  participant API as CP API
+  participant GW as Gateway
+  participant EXP as Experiments
   participant DB as PostgreSQL
-  participant SCHED as Scheduler
-  participant DP as DP Executor
+  participant DP as DataPlane
   participant K8S as Kubernetes
 
-  User->>SDK: Submit run (dataset, code, env, params)
-  SDK->>API: POST /v1/runs (RunSpec)
-  API->>API: Validate production-run gate
-  Note over API: DatasetVersionId + commit_sha + EnvironmentLock required
-  API->>DB: Persist Run + plan (immutable)
-  API->>DB: Store policy_snapshot
-  API-->>SDK: Run ID + status: queued
-  SCHED->>DB: Poll queue
-  SCHED->>DP: RunExecutionRequest (idempotent)
-  DP->>K8S: Create Job/Pod with limits and network policy
-  DP-->>API: Heartbeat (periodic)
-  K8S-->>DP: Workload completes
-  DP->>API: ArtifactCommitted (checksum)
-  DP->>API: RunTerminalState (succeeded/failed)
-  API->>DB: Update run status
-  API->>DB: Emit AuditEvent
+  User->>GW: Submit run request
+  GW->>EXP: Routed API call
+  EXP->>EXP: Validate request and policy requirements
+  EXP->>DB: Persist run and immutable execution plan
+  EXP-->>GW: Accepted / queued response
+  GW-->>User: Run identifier and status
+  EXP->>DP: Internal execution request
+  DP->>K8S: Launch workload
+  DP-->>EXP: Heartbeats / status
+  K8S-->>DP: Completion
+  DP-->>EXP: Terminal state and execution evidence
+  EXP->>DB: Finalize authoritative state
 ```
 
-### 10. Core sequence: deterministic planning
+### Artifact and object flow
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant API as CP API
-  participant VALIDATOR as Spec Validator
-  participant PLANNER as Deterministic Planner
+  participant Job as Workload Pod
+  participant OBJ as Object Store
+  participant DP as DataPlane
+  participant EXP as Experiments
   participant DB as PostgreSQL
 
-  API->>VALIDATOR: Validate PipelineSpec
-  VALIDATOR->>VALIDATOR: Check cycles, refs, digests
-  alt validation failed
-    VALIDATOR-->>API: Validation errors (deterministic)
-    API-->>API: Reject run
-  else validation passed
-    VALIDATOR-->>API: Spec valid
-    API->>PLANNER: Generate execution plan
-    PLANNER->>PLANNER: Stable topological sort + tie-breaker
-    PLANNER->>PLANNER: Compute plan_hash
-    Note over PLANNER: plan_hash = f(pipeline_spec_hash + bindings + run_spec + retry_policy)
-    PLANNER-->>API: Immutable plan + plan_hash
-    API->>DB: Persist plan (append-only)
-  end
+  Job->>OBJ: Upload output object
+  Job->>DP: Report object reference and metadata
+  DP->>EXP: Commit execution evidence
+  EXP->>DB: Persist authoritative artifact metadata
+  EXP->>DB: Emit audit-relevant state transitions where required
 ```
 
-### 11. Core sequence: artifact commit
+### Reconciliation flow
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Pod as Run Pod
-  participant DP as DP Executor
-  participant OBJ as Object Storage
-  participant API as CP API
+  participant EXP as Experiments
   participant DB as PostgreSQL
-
-  Pod->>OBJ: Upload artifact (per-project prefix)
-  Pod->>Pod: Compute checksum
-  Pod->>DP: Artifact ready (URI + checksum)
-  DP->>API: ArtifactCommitted event (idempotent)
-  API->>DB: Persist artifact metadata + checksum
-  API->>DB: Emit AuditEvent
-  API-->>DP: Acknowledged
-```
-
-### 12. Worker / reconciliation flow
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant Worker as CP Worker
-  participant DB as PostgreSQL
-  participant DP as DP Executor
+  participant DP as DataPlane
   participant K8S as Kubernetes
 
-  Worker->>DB: List runs with stale heartbeats
-  Worker->>DP: Query workload status
-  DP->>K8S: Check Pod/Job state
-  DP-->>Worker: Current state
-  alt orphaned run
-    Worker->>DB: Transition to unknown/failed (DB-first)
-    Worker->>DP: Cleanup workload
-    Worker->>DB: Emit AuditEvent (reconciliation)
-  else healthy run
-    Worker->>DB: Update last heartbeat
+  EXP->>DB: Load active or stale runs
+  EXP->>DP: Query workload state
+  DP->>K8S: Inspect execution objects
+  K8S-->>DP: Current state
+  DP-->>EXP: Reconciled execution evidence
+  EXP->>DB: Apply authoritative state transition
+```
+
+### Policy and approval flow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User
+  participant GW as Gateway
+  participant EXP as Experiments
+  participant DB as PostgreSQL
+
+  User->>GW: Submit action requiring policy evaluation
+  GW->>EXP: Forward request
+  EXP->>DB: Resolve policy versions and context
+  EXP->>DB: Persist policy decision
+  alt Approval required
+    EXP->>DB: Persist approval request
+    EXP-->>GW: Awaiting approval
+  else Allowed
+    EXP-->>GW: Continue operation
   end
-
-  Worker->>DB: Evaluate quota / expiry policies
-  alt violation
-    Worker->>DB: Transition state DB-first
-    Worker->>DP: Cancel workload
-    Worker->>DB: Emit AuditEvent
-  end
 ```
-
-### 13. State models
-
-#### Run lifecycle
-
-```mermaid
-stateDiagram-v2
-  [*] --> queued
-  queued --> running: dispatched to DP
-  running --> succeeded: terminal success
-  running --> failed: terminal failure
-  running --> canceled: user/admin cancel
-  running --> unknown: heartbeat timeout
-  queued --> canceled: cancel before dispatch
-  unknown --> failed: reconciliation resolves
-  unknown --> running: heartbeat resumes
-  succeeded --> [*]
-  failed --> [*]
-  canceled --> [*]
-```
-
-#### Model version lifecycle
-
-```mermaid
-stateDiagram-v2
-  [*] --> draft
-  draft --> validating: submit for validation
-  validating --> validated: passes checks
-  validating --> rejected: fails checks
-  validated --> approved: authorized approval
-  approved --> exported: export triggered
-  rejected --> draft: rework
-  exported --> [*]
-  approved --> [*]
-```
-
-#### Project lifecycle
-
-```mermaid
-stateDiagram-v2
-  [*] --> active
-  active --> archived: archive
-  archived --> active: unarchive
-  archived --> [*]
-```
-
-### 14. Core contracts and interfaces
-
-#### CP ↔ DP protocol
-
-```mermaid
-classDiagram
-  class CPtoDPProtocol {
-    <<interface>>
-    +RunExecutionRequest(ctx, runSpec) error
-    +CancelRun(ctx, runID) error
-    +QueryWorkloadStatus(ctx, runID) WorkloadStatus
-    +CleanupWorkload(ctx, runID) error
-  }
-
-  class DPtoCPProtocol {
-    <<interface>>
-    +RunHeartbeat(ctx, runID, status) error
-    +RunTerminalState(ctx, runID, state, details) error
-    +ArtifactCommitted(ctx, runID, artifactMeta) error
-  }
-
-  class RunExecutionRequest {
-    +RunID string
-    +ImageDigest string
-    +Resources ResourceSpec
-    +NetworkPolicy PolicyRef
-    +SecretsRefs []SecretRef
-    +Parameters map
-    +IdempotencyKey string
-  }
-
-  class WorkloadStatus {
-    +RunID string
-    +Phase string
-    +LastHeartbeat time
-    +PodStatuses []PodStatus
-  }
-
-  CPtoDPProtocol --> RunExecutionRequest
-  CPtoDPProtocol --> WorkloadStatus
-```
-
-#### Repository boundary
-
-```mermaid
-classDiagram
-  class ProjectRepository {
-    <<interface>>
-    +Create(...)
-    +GetByID(...)
-    +List(...)
-    +Archive(...)
-  }
-
-  class DatasetRepository {
-    <<interface>>
-    +Create(...)
-    +GetByID(...)
-    +ListByProjectID(...)
-  }
-
-  class DatasetVersionRepository {
-    <<interface>>
-    +Create(...)
-    +GetByID(...)
-    +ListByDatasetID(...)
-  }
-
-  class RunRepository {
-    <<interface>>
-    +Create(...)
-    +GetByID(...)
-    +ListByProjectID(...)
-    +UpdateStatus(...)
-  }
-
-  class ArtifactRepository {
-    <<interface>>
-    +Create(...)
-    +GetByID(...)
-    +ListByRunID(...)
-    +ListByProjectID(...)
-  }
-
-  class AuditEventRepository {
-    <<interface>>
-    +Append(...)
-    +ListByProjectID(...)
-    +ExportNDJSON(...)
-  }
-
-  class ModelVersionRepository {
-    <<interface>>
-    +Create(...)
-    +GetByID(...)
-    +UpdateStatus(...)
-    +ListByProjectID(...)
-  }
-```
-
-### 15. Async / subsystem dependency view
-
-```mermaid
-flowchart LR
-  API[CP API] --> SVC[Service layer]
-  SCHED[Scheduler] --> SVC
-  WORKER[Workers] --> SVC
-
-  SVC --> REPOS[Repository ports]
-  SVC --> OBJPORT[Object storage port]
-  SVC --> AUDITPORT[Audit port]
-  SVC --> AUTHPORT[Auth port]
-  SVC --> SECRETPORT[Secrets port]
-  SVC --> DPPORT[DP dispatch port]
-
-  REPOS --> PG[(PostgreSQL adapters)]
-  OBJPORT --> S3[S3 adapter]
-  AUDITPORT --> AUDITSTORE[Audit store adapter]
-  AUTHPORT --> OIDC[OIDC / SAML adapter]
-  SECRETPORT --> VAULT[Vault adapter]
-  DPPORT --> K8S[Kubernetes adapter]
-```
-
-The service layer is the orchestrator. Everything else is either an adapter or a transport.
-
-### 16. Deployment / infrastructure view
-
-```mermaid
-flowchart TB
-  Internet((Network))
-
-  subgraph Edge["Ingress"]
-    LB[Load Balancer / Ingress Controller]
-  end
-
-  subgraph CPCluster["Control Plane"]
-    API1[CP API replica 1]
-    API2[CP API replica 2]
-    SCHED[Scheduler]
-    WORKER[Workers]
-    DB[(PostgreSQL - external)]
-    OBJ[(S3-compatible Object Store)]
-  end
-
-  subgraph DPCluster["Data Plane (may be separate cluster)"]
-    DPEXEC[DP Executor]
-    NS1[Project Namespace A]
-    NS2[Project Namespace B]
-    NS3[Project Namespace N]
-  end
-
-  subgraph External["External Services"]
-    IDP[Identity Provider]
-    VAULT[Secrets Manager]
-    SIEM[SIEM / Monitoring]
-  end
-
-  Internet --> LB
-  LB --> API1
-  LB --> API2
-
-  API1 <--> DB
-  API2 <--> DB
-  SCHED <--> DB
-  WORKER <--> DB
-
-  API1 <--> OBJ
-  API2 <--> OBJ
-
-  API1 --> DPEXEC
-  SCHED --> DPEXEC
-
-  DPEXEC --> NS1
-  DPEXEC --> NS2
-  DPEXEC --> NS3
-
-  API1 --> IDP
-  DPEXEC --> VAULT
-  API1 --> SIEM
-```
-
-A production deployment uses Helm charts or Kustomize. The CP is stateless (replicas + external DB) for HA. The DP may run on a separate cluster. The platform supports on-premise, private cloud, and air-gapped deployments.
-
----
-
-## Domain and system internals
-
-### Key entities
-
-#### Project
-
-The isolation boundary and root container for all domain entities. A project may be active or archived. Archived projects become read-only. All queries are project-scoped; cross-project dependencies are prohibited.
-
-#### Dataset / DatasetVersion
-
-A dataset is a named collection within a project. DatasetVersion is an immutable snapshot referencing storage URI, checksum, schema, stats, and lineage. Immutability is enforced by database triggers.
-
-#### CodeRef
-
-An immutable reference to a specific commit SHA and repository URL. Required for production-runs.
-
-#### EnvironmentLock
-
-An immutable specification of the execution environment including image digest, package list, and optional SBOM reference. Required for production-runs.
-
-#### Run
-
-The minimal unit of execution and reproducibility. A Run is defined by its Project, DatasetVersion, CodeRef commit SHA, EnvironmentLock, execution parameters, and policy snapshot. Reproducibility is the ability to re-execute a Run and obtain results consistent with the recorded inputs; determinism is not assumed when bindings are missing or user code introduces non-determinism.
-
-#### PipelineSpec
-
-A validated, hashed specification of a multi-step DAG pipeline. Cycle detection and reference verification are enforced at validation time. Plan hashing is deterministic with stable topological ordering and tie-breaker rules.
-
-#### Artifact
-
-A versioned output of a Run, stored in S3-compatible object storage with checksums. Subject to retention policies and legal hold enforcement. Access is mediated and audited through the Control Plane.
-
-#### ModelVersion
-
-A lifecycle entity referencing a source Run and an Artifact. Subject to validation/approval workflows with RBAC-gated promotion and export policy controls.
-
-#### AuditEvent
-
-An append-only, non-disableable record of significant actions. Covers all state-changing operations, access to protected downloads, authentication events, privilege changes, and secrets access events (metadata only, never values). Exportable to SIEM via webhook/syslog with retries and idempotency.
-
-### Business rules and invariants
-
-#### DB-first orchestration
-
-For run submission, status transitions, artifact commits, and model promotion, central state is persisted before any side effect is attempted.
-
-#### Single authority
-
-The platform never treats Data Plane state as canonical business state. The DP provides execution evidence; PostgreSQL remains authoritative.
-
-#### Production-run gate
-
-A production-run is accepted only when CodeRef commit SHA, EnvironmentLock, DatasetVersion references, and required policy approvals are explicit and recorded. Otherwise the Run is rejected or limitations are recorded in Run metadata and AuditEvent.
-
-#### Deterministic planning
-
-Plan hash is deterministic from (pipeline_spec_hash + bindings + run_spec + retry_policy). Stable topological ordering with tie-breaker rules. Idempotent create operations produce identical resources on duplicate requests.
-
-#### Truthful failure handling
-
-Failure states are explicit. The platform must not represent a partially executed run as fully succeeded. Reconciliation resolves orphaned runs; no manual status edits.
-
-#### Append-only audit
-
-Audit cannot be disabled. All state-changing operations, protected access, and privilege changes are recorded. Export supports SIEM integration with retries, idempotency, and per-project filters.
-
-### Security boundaries
-
-* OIDC (primary) and optional SAML authentication with session TTL, forced logout, and limits on parallel sessions.
-* Project-scoped RBAC with deny-by-default; object-level authorization on sensitive reads, downloads, and exports.
-* Secrets supplied via external secrets manager, ephemeral and minimal in scope, never exposed in UI, logs, metrics, or artifacts.
-* Data Plane executes untrusted user code in containerized environments with restricted privileges; network access and resource limits enforced by policy.
-* Control Plane never executes user code; enforced by `depguard` lint rules.
-* Service accounts subject to the same RBAC and audited.
-* CP/DP boundary enforced at the module level via static analysis.
 
 ---
 
 ## Repository structure
 
-The repository is organized by visibility boundary (open/closed), with shared API specifications and documentation at the top level.
-
-```
+```text
 .
-├── api/                          # OpenAPI / contract specifications
-├── closed/                       # Proprietary implementation
-│   ├── audit/                    # Audit subsystem
-│   ├── dataset-registry/         # Dataset and DatasetVersion persistence
-│   ├── deploy/                   # Docker Compose and deployment assets
-│   │   └── docker-compose.yml    # Local dev stack
-│   ├── experiments/              # Runs, plans, execution engine
-│   ├── gateway/                  # API gateway / ingress
-│   ├── internal/
-│   │   ├── domain/               # Domain entities and value objects
-│   │   ├── repo/postgres/        # PostgreSQL repository implementations
-│   │   ├── runtimeexec/          # Data Plane runtime execution
-│   │   ├── service/
-│   │   │   └── artifacts/        # Artifact service with presigned URLs
-│   │   └── storage/
-│   │       └── objectstore/      # S3-compatible storage abstraction
-│   ├── lineage/                  # Lineage tracking subsystem
-│   ├── migrations/               # SQL schema migrations
-│   ├── quality/                  # Data quality subsystem
-│   └── scripts/
-│       └── dev.sh                # Local development helper
-├── open/                         # Open-source components
-│   ├── demo/
-│   │   └── quickstart.sh         # Demo / smoke test quickstart
-│   └── sdk/                      # Git submodule
-│       └── python/               # Python SDK (submodule)
-│           ├── src/              # SDK source
-│           └── tests/            # SDK tests
-├── docs/
-│   ├── assets/                   # Banner and visual assets
-│   └── enterprise/               # Normative specification
-├── tools/
-│   └── cicd/                     # CI/CD tooling
-├── .github/
-│   └── workflows/                # GitHub Actions CI pipelines
-├── .golangci.yml                 # Linter config with CP/DP depguard rules
-├── .gitmodules                   # Python SDK submodule reference
-├── go.mod                        # Go module definition
-├── go.sum                        # Go dependency checksums
-├── Makefile                      # Common dev commands
-├── roadmap.json                  # Production-grade roadmap (M0-M9)
-├── LICENSE                       # Apache-2.0
+├── core/
+│   └── contracts/                # Canonical contracts, schemas, and baseline compatibility assets
+├── deploy/
+│   ├── helm/                     # Helm charts: animus-datapilot and animus-dataplane
+│   ├── docker/                   # Dockerfiles and build assets
+│   └── policy/                   # Admission and policy examples
+├── closed/                       # Canonical service implementations
+│   ├── gateway/                  # Public entrypoint, auth/session, routing
+│   ├── dataset-registry/         # Dataset and dataset-version services
+│   ├── experiments/              # Runs, planning, execution coordination, policy logic
+│   ├── lineage/                  # Lineage service
+│   ├── audit/                    # Audit service
+│   ├── dataplane/                # Data Plane executor service
+│   ├── frontend_console/         # Optional UI sources
+│   ├── internal/                 # Shared internal packages and adapters
+│   ├── migrations/               # PostgreSQL migrations; schema source of truth
+│   ├── deploy/                   # Compatibility shim for deploy assets
+│   └── scripts/                  # Compatibility shim for enterprise script split
+├── open/
+│   ├── demo/                     # Demo and smoke-test assets
+│   ├── api/                      # Legacy contract shim
+│   └── sdk/                      # Legacy SDK shim
+├── scripts/                      # Development, CI, hygiene, and release tooling
+├── docs/                         # Architecture, enterprise, ops, and security documentation
+├── enterprise/                   # Submodule target placeholder
+├── sdk/                          # Submodule target placeholder
+├── cmd/                          # Auxiliary command packages
+├── tools/                        # CI/CD and helper tooling
+├── third_party/                  # Externalized or vendored helper assets
+├── vendor/                       # Vendored Go dependencies where applicable
+├── .golangci.yml                 # Lint and depguard boundary enforcement
+├── go.mod
+├── go.sum
+├── Makefile
 └── README.md
 ```
 
 ---
 
-## Key flows
+## Development workflow
 
-### Run submission flow
+### Common commands
 
-1. User submits RunSpec via Python SDK or API.
-2. CP API validates production-run gate (DatasetVersion + commit SHA + EnvironmentLock).
-3. CP persists Run, plan, and policy snapshot (DB-first).
-4. Scheduler picks up queued run, dispatches to DP.
-5. DP launches Kubernetes workload with resource limits and network policy.
-6. DP reports heartbeats; CP updates last heartbeat.
-7. Workload completes, artifacts uploaded with checksums.
-8. DP reports terminal state; CP finalizes run status.
-9. AuditEvents emitted throughout.
+Bootstrap dependencies:
 
-### Pipeline execution flow
-
-1. PipelineSpec validated (cycles, refs, digests).
-2. Deterministic plan generated with stable topological sort.
-3. Plan hash computed and plan stored immutably.
-4. Scheduler dispatches node-runs respecting DAG dependencies.
-5. Retries/backoff applied per node; partial failure policies enforced.
-6. Graph status tracked; all transitions audited.
-
-### Reproducibility flow
-
-1. User requests reproducibility bundle for a completed Run.
-2. CP assembles: DatasetVersion, CodeRef (commit SHA + repo URL), EnvironmentLock (image digest + SBOM ref), parameters, policy snapshot.
-3. Bundle hash computed (stable).
-4. Replay creates a new Run from the snapshot and records the linkage.
-
-### Model promotion flow
-
-1. ModelVersion created from a source Run and Artifact.
-2. Validation/approval workflow gated by RBAC.
-3. Only authorized roles can approve; approval emits AuditEvent.
-4. Export interface controlled by policy; exports audited.
-
-### Dev environment flow
-
-1. User requests dev environment within a project.
-2. DP controller creates isolated Pod with TTL and quotas.
-3. Network policies and template restrictions applied from project policy.
-4. Remote access (terminal/IDE) mediated and audited.
-5. Transition path from dev work to production-run submission.
-
-### Background enforcement flow
-
-1. Workers check for stale heartbeats and orphaned runs.
-2. Reconciliation resolves to terminal states or resumes.
-3. Quota and expiry policies evaluated.
-4. Violations trigger DB-first state transitions and DP cleanup.
-5. All reconciliation decisions audited.
-
----
-
-## Technology stack
-
-### Languages
-
-* Go (91.4%)
-* Python (SDK and tooling)
-* SQL / PLpgSQL (migrations and triggers)
-* Shell (scripts and CI)
-
-### Control Plane
-
-* Go HTTP API with structured logging and request ID propagation
-* Deterministic planner with stable topological sort
-* PostgreSQL for authoritative metadata
-* S3-compatible object storage for artifacts
-
-### Data Plane
-
-* Kubernetes (Jobs/Pods) for workload execution
-* Container isolation with resource limits and network policies
-* Ephemeral secrets injection at execution time
-
-### Identity and Security
-
-* OIDC (primary) and SAML (optional) via `coreos/go-oidc`
-* OAuth2 via `golang.org/x/oauth2`
-* Vault-like external secrets manager
-* Project-scoped RBAC with deny-by-default
-
-### Persistence
-
-* PostgreSQL (external supported) via `jackc/pgx`
-* S3-compatible object storage via `minio/minio-go`
-
-### Observability
-
-* Prometheus + OpenTelemetry + structured logs
-* Correlation IDs across CP and DP
-
-### Packaging and Delivery
-
-* Helm charts (preferred) and/or Kustomize
-* Docker and Docker Compose for local development
-* Air-gapped bundle support with integrity verification
-* SBOM generation and vulnerability scanning in CI
-
-### Tooling
-
-* `golangci-lint` with `depguard` for CP/DP boundary enforcement
-* GitHub Actions CI pipelines
-* Makefile-based task runner
-* Python `unittest` for SDK tests
-
----
-
-## Setup, development, and operation
-
-### Prerequisites
-
-* Go 1.25+
-* Docker and Docker Compose
-* Python 3 (for SDK development and linting)
-* PostgreSQL access for non-container workflows
-* Git (with submodule support for Python SDK)
-
-### Local development
-
-Initialize the repository and dependencies:
-
-```
+```bash
 make bootstrap
 ```
 
-Initialize the Python SDK submodule:
+Run formatting:
 
-```
-git submodule update --init --recursive open/sdk
-```
-
-Start the local development stack:
-
-```
-make dev
-```
-
-Run the demo quickstart:
-
-```
-make demo
-```
-
-Run a smoke test:
-
-```
-make demo-smoke
-```
-
-Tear down the demo stack:
-
-```
-make demo-down
-```
-
-### Code quality
-
-Format code:
-
-```
+```bash
 make fmt
 ```
 
-Run all linters (gofmt, go vet, golangci-lint, Python compileall):
+Run linting:
 
-```
+```bash
 make lint
 ```
 
-Run all tests (Go + Python SDK):
+Run tests:
 
-```
+```bash
 make test
 ```
 
-Build all packages:
+Build the codebase:
 
-```
+```bash
 make build
+```
+
+Start local development stack:
+
+```bash
+make dev
 ```
 
 ### Development notes
 
-* `closed/deploy/docker-compose.yml` defines the local development stack.
-* The Python SDK lives in `open/sdk/python/` as a git submodule.
-* `api/` contains OpenAPI/contract specifications; breaking changes require a major version bump.
-* `.golangci.yml` enforces CP/DP boundary: control plane packages (`audit`, `dataset-registry`, `gateway`, `lineage`, `quality`) are prohibited from importing `runtimeexec`.
-* `docs/enterprise/` contains the normative specification; this README is an entry point and not the normative source.
+* `closed/migrations/` is the persistence source of truth.
+* `core/contracts/` is the contract source of truth.
+* `deploy/helm/*/values.yaml` is the deployment-default source of truth.
+* `docs/*` contains normative operational and security references.
+* `.golangci.yml` enforces architectural boundaries, including the separation between Control Plane code and runtime execution internals.
 
-### Production operation notes
+---
 
-Production deployment uses Helm charts or Kustomize and typically requires:
+## Production operations
 
-* Kubernetes cluster with namespace isolation per project.
-* External PostgreSQL (non-public, backed up, with RPO/RTO targets).
-* S3-compatible object storage with per-project prefix separation.
-* OIDC-compatible identity provider (and optional SAML).
-* External secrets manager (Vault-like) for ephemeral credential injection.
-* SIEM integration for audit export (webhook/syslog).
-* Prometheus + OpenTelemetry endpoints for observability.
+A production deployment is expected to satisfy the following baseline conditions:
 
-Operational requirements:
+* Kubernetes-backed deployment of both DataPilot and DataPlane
+* externally managed PostgreSQL with tested backup and restore procedures
+* S3-compatible object storage with controlled access and project-safe object layout
+* OIDC integration with secure session settings
+* rotated internal auth secret for CP/DP communication
+* network isolation between public, control, and execution zones
+* observability for services, workloads, and request paths
+* policy-based image integrity controls where required by environment
 
-* CP is stateless and supports horizontal scaling (replicas + external DB).
-* DP may run on a separate cluster; multi-cluster-ready.
-* Network policies must isolate user workload namespaces.
-* All secrets must be ephemeral and minimal in scope.
-* Backup/restore procedures must be validated; runbooks executed in drills.
-* Air-gapped deployments require pre-built bundles with integrity verification and SBOM gates.
+### Operational characteristics
+
+* the Control Plane is horizontally scalable when backed by external stateful dependencies
+* the Data Plane may be isolated onto a separate cluster or execution domain
+* workload state is reconciled into DB-backed authoritative state rather than trusted directly
+* production deployments should pin images by digest
+* air-gapped deployment is supported through pre-built artifacts and policy-aware installation flows
+
+### Observability
+
+The platform is designed to support:
+
+* structured logs
+* correlation and request identifiers
+* metrics and traces where configured
+* audit export for security evidence pipelines
+
+### Backup and recovery expectations
+
+Operators should treat PostgreSQL and object storage together as the recoverable state surface. Backup validation and restore drills are not optional in a production-grade deployment.
 
 ---
 
 ## Roadmap
 
-The production-grade roadmap is tracked in `roadmap.json` and structured across 10 milestones (M0–M9).
+The roadmap is tracked in `roadmap.json`.
 
-### Milestone summary
-
-* **M0 — Foundations & Architecture Baseline** *(done)*: CP/DP boundary, repo boundaries, Kubernetes baseline, object storage abstraction.
-* **M1 — Domain Model & Metadata Core** *(done)*: Project/Dataset/DatasetVersion/Artifact/AuditEvent persistence, immutability enforcement, audit export MVP.
-* **M2 — Execution Contracts, Runs & Deterministic Planning** *(in progress)*: PipelineSpec validation, RunSpec bindings, plan persistence, deterministic hashing, dry-run executor.
-* **M3 — Data Plane Runtime & Real Execution**: DP executor on Kubernetes, CP↔DP protocol, artifacts commit, reconciliation.
-* **M4 — Scheduling, Queues, Quotas, Cancellation**: Production-grade scheduling, retry/backoff, cancellation end-to-end.
-* **M5 — Security & Governance Hardening**: SSO, RBAC matrix, secrets TTL, SIEM-grade audit export, retention policies.
-* **M6 — Pipelines (DAG) & Orchestration**: PipelineRun with node-runs, DAG engine, graph query APIs.
-* **M7 — Developer Environments**: Managed dev environments with audited remote access, TTL, templates.
-* **M8 — Model Registry & Promotion**: Model lifecycle, validation/approval, export hooks, lineage integration.
-* **M9 — Operability, HA/DR, Packaging, Supply Chain, E2E Acceptance & Release**: HA, observability, backups/DR, Helm packaging, air-gapped/SBOM gates, automated E2E acceptance.
-
-### Production-grade definition
-
-The platform is production-grade when all mandatory acceptance criteria are satisfied and verified on a working installation with security and audit policies enabled:
-
-* End-to-end ML lifecycle runs within a Project without external stitching.
-* Any production-run reproducible from DatasetVersion + commit SHA + EnvironmentLock.
-* All state-changing actions audited, append-only, exportable.
-* SSO + RBAC enforced end-to-end with object-level authorization.
-* Install/upgrade/rollback automated and documented.
-* No implicit state; every result explainable via domain graph.
-* HA control plane, observability, backup/DR validated.
+This README documents the current production architecture shape and repository truth model. Roadmap state should not be interpreted as implemented behavior unless corresponding code, migrations, deployment assets, and docs are present.
 
 ---
 
 ## Explicit non-goals
 
-* Built-in Git hosting or full IDE replacement.
-* A full inference platform (export to external systems is supported).
-* A standalone Feature Store product (interfaces may be integrated).
+* built-in Git hosting
+* full IDE replacement
+* a standalone inference platform
+* a standalone feature-store product
 
 ---
 
 ## Documentation
 
-The authoritative specification is in `docs/enterprise/`. This README is an entry point and is not the normative source.
+The broader documentation entrypoint is `docs/README.md`.
+
+Important documentation groups include:
+
+* `docs/enterprise/` — enterprise and normative platform specification
+* `docs/ops/` — deployment, configuration, backup, and air-gapped operation
+* `docs/security/` — RBAC, session, and security enforcement model
+* `docs/architecture/` — architecture notes and migration/split references
+
+Where README text and detailed operator/security documentation differ in precision, the detailed documentation and source artifacts take precedence.
 
 ---
 
